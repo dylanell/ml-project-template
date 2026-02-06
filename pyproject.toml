@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "joblib",
+    "lightning>=2.6.1",
     "mlflow>=3.9.0",
     "numpy<2",
     "pandas",

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-
+from typing import Optional
 import joblib
 import numpy as np
 from sklearn.ensemble import GradientBoostingClassifier as _GradientBoostingClassifier
@@ -18,8 +18,18 @@ class GBClassifier(BaseModel):
     def __init__(self, **kwargs):
         self.model = _GradientBoostingClassifier(**kwargs)
 
-    def train(self, dataset: Dataset) -> None:
-        self.model.fit(dataset.X, dataset.y)
+    def train(
+        self, 
+        train_data: Dataset, 
+        val_data: Optional[Dataset] = None
+    ) -> None:
+        self.model.fit(train_data.X, train_data.y)
+
+        if val_data is not None:
+            # TODO: Run validation here?
+            pass
+
+        # TODO: Log mlflow losses, metrics, etc.
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         return self.model.predict(X)

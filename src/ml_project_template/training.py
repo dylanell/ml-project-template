@@ -28,7 +28,7 @@ class Trainer:
     def run(
         self,
         train_data: Dataset,
-        test_data: Dataset | None = None,
+        val_data: Dataset | None = None,
         model_path: str | None = None,
         run_name: str | None = None,
     ) -> dict:
@@ -36,25 +36,25 @@ class Trainer:
 
         Args:
             train_data: Training dataset
-            test_data: Optional test dataset for evaluation
+            val_data: Optional test dataset for validation
             model_path: Optional path to save model artifact
             run_name: Optional MLflow run name (auto-generated if not provided)
 
         Returns:
-            Dict of metrics (empty if no test_data provided)
+            Dict of metrics (empty if no val_data provided)
         """
         with mlflow.start_run(run_name=run_name):
             # Log model parameters
             mlflow.log_params(self.model.get_params())
 
             # Train model
-            self.model.train(train_data)
+            self.model.train(train_data=train_data, val_data=val_data)
 
             # If test data is provided, predict and compute metrics
             metrics = {}
-            if test_data:
-                predictions = self.model.predict(test_data.X)
-                metrics = {"accuracy": accuracy_score(test_data.y, predictions)}
+            if val_data is not None:
+                predictions = self.model.predict(val_data.X)
+                metrics = {"accuracy": accuracy_score(val_data.y, predictions)}
                 mlflow.log_metrics(metrics)
 
             # If model path is provided, write model artifact
