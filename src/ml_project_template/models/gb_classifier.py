@@ -18,18 +18,13 @@ class GBClassifier(BaseModel):
     def __init__(self, **kwargs):
         self.model = _GradientBoostingClassifier(**kwargs)
 
-    def train(
-        self, 
-        train_data: Dataset, 
-        val_data: Optional[Dataset] = None
+    def _fit(
+        self,
+        train_data: Dataset,
+        val_data: Optional[Dataset] = None,
+        **kwargs
     ) -> None:
         self.model.fit(train_data.X, train_data.y)
-
-        if val_data is not None:
-            # TODO: Run validation here?
-            pass
-
-        # TODO: Log mlflow losses, metrics, etc.
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         return self.model.predict(X)
@@ -44,5 +39,8 @@ class GBClassifier(BaseModel):
     def load(self, path: str) -> None:
         self.model = joblib.load(f"{path}.joblib")
 
+    # Override: BaseModel auto-captures __init__ args, but since this class
+    # takes **kwargs, it would record {"kwargs": {...}} (a nested dict).
+    # Sklearn's get_params() gives us a flat dict of all params with defaults.
     def get_params(self) -> dict:
         return self.model.get_params()
