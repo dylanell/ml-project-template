@@ -21,7 +21,13 @@ uv run python scripts/train.py --config configs/iris_mlp.json
 uv run python scripts/train.py --config configs/iris_gb.json
 
 # Start MLflow server (for experiment tracking UI)
-mlflow server --host 127.0.0.1 --port 5000
+mlflow server --host 0.0.0.0 --port 5000 --allowed-hosts "host.docker.internal:5000,127.0.0.1:5000,localhost:5000"
+
+# Docker
+docker build -t ml-project-template .
+docker run -v $(pwd)/.data:/app/.data -v $(pwd)/.models:/app/.models \
+  -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
+  ml-project-template --config configs/iris_mlp.json
 ```
 
 ## Architecture

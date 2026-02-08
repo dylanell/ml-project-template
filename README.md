@@ -54,11 +54,34 @@ Configure VSCode notebooks (add to .vscode/settings.json)
 
 ### Run MLFlow Locally
 
-Run the following in a terminal then navigate to [http://127.0.0.1:5000](http://127.0.0.1:5000).
+Run the following in a terminal then navigate to [http://0.0.0.1:5000](http://0.0.0.1:5000).
 
 ```
-uv run mlflow server --host 127.0.0.1 --port 5000
+mlflow server --host 0.0.0.0 --port 5000 --allowed-hosts "host.docker.internal:5000,127.0.0.1:5000,localhost:5000"
 ```
+
+### Docker
+
+```bash
+# Build the image
+docker build -t ml-project-template .
+
+# Run training (mount data + models, point at local MLflow)
+docker run \
+  -v $(pwd)/.data:/app/.data \
+  -v $(pwd)/.models:/app/.models \
+  -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
+  ml-project-template --config configs/iris_mlp.json
+
+# Run with GPU (remote machine)
+docker run --gpus all \
+  -v /path/to/data:/app/.data \
+  -v /path/to/models:/app/.models \
+  -e MLFLOW_TRACKING_URI=http://mlflow-server:5000 \
+  ml-project-template --config configs/iris_mlp.json
+```
+
+> `host.docker.internal` resolves to the host machine from inside Docker on Mac/Windows. On Linux, add `--add-host=host.docker.internal:host-gateway`.
 
 ### Training
 

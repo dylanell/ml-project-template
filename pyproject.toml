@@ -9,11 +9,13 @@ dependencies = [
     "joblib",
     "lightning>=2.6.1",
     "mlflow>=3.9.0",
-    "numpy<2",
+    "numpy<2; sys_platform == 'darwin'",
+    "numpy; sys_platform == 'linux'",
     "pandas",
     "pip>=26.0.1",
     "scikit-learn",
-    "torch>=2.0,<2.3",
+    "torch>=2.0,<2.3; sys_platform == 'darwin'",
+    "torch>=2.0; sys_platform == 'linux'",
 ]
 
 [project.scripts]
