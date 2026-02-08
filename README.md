@@ -54,7 +54,7 @@ Configure VSCode notebooks (add to .vscode/settings.json)
 
 ### Run MLFlow Locally
 
-Run the following in a terminal then navigate to [http://0.0.0.1:5000](http://0.0.0.1:5000).
+Run the following in a terminal then navigate to [http://0.0.0.0:5000](http://0.0.0.0:5000).
 
 ```
 mlflow server --host 0.0.0.0 --port 5000 --allowed-hosts "host.docker.internal:5000,127.0.0.1:5000,localhost:5000"
