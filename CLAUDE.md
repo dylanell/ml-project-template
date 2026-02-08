@@ -16,6 +16,10 @@ uv venv && uv pip install -e "."
 uv run python scripts/onboard_iris_dataset.py
 uv run jupyter notebook
 
+# Train a model from config
+uv run python scripts/train.py --config configs/iris_mlp.json
+uv run python scripts/train.py --config configs/iris_gb.json
+
 # Start MLflow server (for experiment tracking UI)
 mlflow server --host 127.0.0.1 --port 5000
 ```
@@ -33,9 +37,10 @@ src/ml_project_template/
 │   ├── gb_classifier.py     # Sklearn GradientBoosting wrapper
 │   └── mlp_classifier.py    # PyTorch MLP (MLP nn.Module + MLPClassifier)
 
+configs/                     # Training configs (JSON)
 .data/                       # Raw datasets (gitignored)
 .models/                     # Saved model artifacts (gitignored)
-scripts/                     # Data onboarding scripts
+scripts/                     # Data onboarding + training scripts
 notebooks/                   # R&D notebooks
 ```
 
