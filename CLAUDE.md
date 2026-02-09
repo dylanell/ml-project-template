@@ -28,6 +28,18 @@ docker build -t ml-project-template .
 docker run -v $(pwd)/.data:/app/.data -v $(pwd)/.models:/app/.models \
   -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
   ml-project-template --config configs/iris_mlp.json
+
+# Kubernetes (local Docker Desktop) — first-time setup
+kubectl apply -f k8s/pvcs.yaml
+kubectl apply -f k8s/data-loader.yaml
+kubectl wait --for=condition=Ready pod/data-loader
+kubectl cp .data/iris data-loader:/data/iris
+kubectl delete pod data-loader
+
+# Kubernetes — run training
+kubectl apply -f k8s/training-job.yaml
+kubectl logs job/iris-training --follow
+kubectl delete job iris-training
 ```
 
 ## Architecture

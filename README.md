@@ -83,6 +83,34 @@ docker run --gpus all \
 
 > `host.docker.internal` resolves to the host machine from inside Docker on Mac/Windows. On Linux, add `--add-host=host.docker.internal:host-gateway`.
 
+### Kubernetes (Local)
+
+Run training as a K8s Job on Docker Desktop's built-in cluster. See [k8s/README.md](k8s/README.md) for details.
+
+```bash
+# Build image (shared with Docker Desktop K8s)
+docker build -t ml-project-template .
+
+# First-time: create volumes and load data
+kubectl apply -f k8s/pvcs.yaml
+kubectl apply -f k8s/data-loader.yaml
+kubectl wait --for=condition=Ready pod/data-loader
+kubectl cp .data/iris data-loader:/data/iris
+kubectl delete pod data-loader
+
+# Submit training job
+kubectl apply -f k8s/training-job.yaml
+
+# Watch logs
+kubectl logs job/iris-training --follow
+
+# Check status
+kubectl get jobs
+
+# Clean up
+kubectl delete job iris-training
+```
+
 ### Training
 
 ```python
