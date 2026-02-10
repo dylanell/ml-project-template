@@ -1,11 +1,15 @@
-# Kubernetes Training Jobs
+# Kubernetes Jobs
 
-Run training as a Kubernetes Job on a local Docker Desktop cluster.
+Run preprocessing and training as Kubernetes Jobs on a local Docker Desktop cluster.
 
 ## Prerequisites
 
 1. **Docker Desktop** with Kubernetes enabled (Settings > Kubernetes > Enable)
-2. **Image built locally**: `docker build -t training-job .`
+2. **Images built locally**:
+   ```bash
+   docker build -t preprocessing-job -f docker/preprocess-iris-dataset/Dockerfile .
+   docker build -t training-job -f docker/train-iris-classifier/Dockerfile .
+   ```
 3. **MLflow server running** (if tracking is desired):
    ```bash
    mlflow server --host 0.0.0.0 --port 5000 --allowed-hosts "host.docker.internal:5000,127.0.0.1:5000,localhost:5000"
@@ -41,6 +45,17 @@ kubectl create configmap training-configs --from-file=configs/ --dry-run=client 
 ```
 
 ## Usage
+
+### Preprocessing
+
+```bash
+# Run preprocessing (writes processed CSV to data PVC)
+kubectl apply -f k8s/preprocess-iris-dataset.yaml
+kubectl logs job/preprocess-iris-dataset --follow
+kubectl delete job preprocess-iris-dataset
+```
+
+### Training
 
 ```bash
 # Submit a training job

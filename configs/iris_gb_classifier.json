@@ -5,6 +5,10 @@
         "test_size": 0.2,
         "random_state": 42
     },
+    "preprocessing": {
+        "scaling": "min-max",
+        "output_path": ".data/iris/iris_processed.csv"
+    },
     "model": {
         "name": "gb_classifier",
         "params": {

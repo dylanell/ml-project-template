@@ -5,6 +5,10 @@
         "test_size": 0.2,
         "random_state": 42
     },
+    "preprocessing": {
+        "scaling": "standardize",
+        "output_path": ".data/iris/iris_processed.csv"
+    },
     "model": {
         "name": "mlp_classifier",
         "params": {

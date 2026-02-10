@@ -1,7 +1,10 @@
-"""Config-driven training script.
+"""Config-driven training script for Iris classifiers.
+
+Loads preprocessed data (if available) or raw data, then trains
+the model specified in the config.
 
 Usage:
-    uv run python scripts/train.py --config configs/iris_mlp.json
+    uv run python scripts/train_iris_classifier.py --config configs/iris_mlp_classifier.json
 """
 
 import argparse
@@ -13,25 +16,29 @@ from ml_project_template.models import ModelRegistry
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train a model from a JSON config.")
+    parser = argparse.ArgumentParser(description="Train an Iris classifier from a JSON config.")
     parser.add_argument("--config", required=True, help="Path to JSON config file")
     args = parser.parse_args()
 
     with open(args.config) as f:
         config = json.load(f)
 
-    print(f"[train.py] Training with config:")
-    print(f"{json.dumps(config, indent=2)}")
+    print(f"[train] Running with config:")
+    print(json.dumps(config, indent=2))
 
     # Validate required top-level keys
     for key in ("data", "model", "training"):
         if key not in config:
-            print(f"[train.py] Error: config missing required key '{key}'")
+            print(f"[train] Error: config missing required key '{key}'")
             sys.exit(1)
 
-    # Load and split data
+    # Load data — use preprocessed output if available, otherwise raw
     data_cfg = config["data"]
-    dataset = Dataset.from_csv(data_cfg["path"], target_column=data_cfg["target_column"])
+    preprocess_cfg = config.get("preprocessing", {})
+    data_path = preprocess_cfg.get("output_path", data_cfg["path"])
+    print(f"\n[train] Loading data from {data_path}")
+
+    dataset = Dataset.from_csv(data_path, target_column=data_cfg["target_column"])
     train_data, val_data = dataset.split(
         test_size=data_cfg.get("test_size", 0.2),
         random_state=data_cfg.get("random_state", 42),
@@ -47,6 +54,10 @@ def main():
     run_name = train_cfg.pop("run_name", None)
     model_path = train_cfg.pop("model_path", None)
 
+    # Flatten data + preprocessing config for MLflow logging
+    extra_params = {f"data.{k}": v for k, v in data_cfg.items()}
+    extra_params.update({f"preprocessing.{k}": v for k, v in preprocess_cfg.items()})
+
     # Everything remaining is model-specific training kwargs
     model.train(
         experiment_name=experiment_name,
@@ -54,10 +65,11 @@ def main():
         val_data=val_data,
         run_name=run_name,
         model_path=model_path,
+        extra_params=extra_params,
         **train_cfg,
     )
 
-    print(f"[train.py] Training complete.")
+    print(f"[train] Training complete.")
 
 
 if __name__ == "__main__":

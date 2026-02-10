@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: preprocess-iris-dataset
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: preprocessor
+          image: preprocessing-job:latest
+          imagePullPolicy: Never
+          args: ["--config", "configs/iris_mlp_classifier.json"]
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          volumeMounts:
+            - name: configs
+              mountPath: /app/configs
+              readOnly: true
+            - name: data
+              mountPath: /app/.data
+      volumes:
+        - name: configs
+          configMap:
+            name: training-configs
+        - name: data
+          persistentVolumeClaim:
+            claimName: training-data

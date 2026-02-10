@@ -16,15 +16,23 @@ uv venv && uv pip install -e "."
 uv run python scripts/onboard_iris_dataset.py
 uv run jupyter notebook
 
+# Preprocess data
+uv run python scripts/preprocess_iris_dataset.py --config configs/iris_mlp_classifier.json
+
 # Train a model from config
-uv run python scripts/train.py --config configs/iris_mlp_classifier.json
-uv run python scripts/train.py --config configs/iris_gb_classifier.json
+uv run python scripts/train_iris_classifier.py --config configs/iris_mlp_classifier.json
+uv run python scripts/train_iris_classifier.py --config configs/iris_gb_classifier.json
 
 # Start MLflow server (for experiment tracking UI)
 mlflow server --host 0.0.0.0 --port 5000 --allowed-hosts "host.docker.internal:5000,127.0.0.1:5000,localhost:5000"
 
 # Docker
-docker build -t training-job .
+docker build -t preprocessing-job -f docker/preprocess-iris-dataset/Dockerfile .
+docker build -t training-job -f docker/train-iris-classifier/Dockerfile .
+
+docker run -v $(pwd)/.data:/app/.data -v $(pwd)/configs:/app/configs \
+  preprocessing-job --config configs/iris_mlp_classifier.json
+
 docker run -v $(pwd)/.data:/app/.data -v $(pwd)/.models:/app/.models \
   -v $(pwd)/configs:/app/configs \
   -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
@@ -37,6 +45,11 @@ kubectl wait --for=condition=Ready pod/data-loader
 kubectl cp .data/iris data-loader:/data/iris
 kubectl delete pod data-loader
 kubectl create configmap training-configs --from-file=configs/
+
+# Kubernetes — run preprocessing
+kubectl apply -f k8s/preprocess-iris-dataset.yaml
+kubectl logs job/preprocess-iris-dataset --follow
+kubectl delete job preprocess-iris-dataset
 
 # Kubernetes — run training
 kubectl apply -f k8s/train-iris-mlp-classifier.yaml
@@ -58,9 +71,12 @@ src/ml_project_template/
 │   └── mlp_classifier.py    # PyTorch MLP (MLP nn.Module + MLPClassifier)
 
 configs/                     # Training configs (JSON)
+docker/                                  # Dockerfiles per pipeline stage
+├── preprocess-iris-dataset/Dockerfile   # Preprocessing image
+└── train-iris-classifier/Dockerfile     # Training image
 .data/                       # Raw datasets (gitignored)
 .models/                     # Saved model artifacts (gitignored)
-scripts/                     # Data onboarding + training scripts
+scripts/                     # Data onboarding, preprocessing + training scripts
 notebooks/                   # R&D notebooks
 ```
 

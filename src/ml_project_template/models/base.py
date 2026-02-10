@@ -91,6 +91,7 @@ class BaseModel(ABC):
         val_data: Dataset | None = None,
         run_name: str | None = None,
         model_path: str | None = None,
+        extra_params: dict | None = None,
         **train_kwargs,
     ) -> None:
         """Full training pipeline with MLflow tracking.
@@ -101,12 +102,17 @@ class BaseModel(ABC):
             val_data: Optional validation dataset
             run_name: Optional MLflow run name
             model_path: Optional path to save model artifact
+            extra_params: Optional extra params to log (e.g. data/preprocessing config)
             **train_kwargs: Model-specific training arguments passed to _fit()
         """
         mlflow.set_experiment(experiment_name)
         with mlflow.start_run(run_name=run_name):
             # Log model params
             mlflow.log_params(self.get_params())
+
+            # Log extra params (data config, preprocessing config, etc.)
+            if extra_params:
+                mlflow.log_params(extra_params)
 
             # Model-specific training
             # Training params manually logged 

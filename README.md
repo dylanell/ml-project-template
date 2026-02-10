@@ -63,11 +63,18 @@ mlflow server --host 0.0.0.0 --port 5000 --allowed-hosts "host.docker.internal:5
 ### Docker
 
 ```bash
-# Build the image
-docker build -t training-job .
+# Build images
+docker build -t preprocessing-job -f docker/preprocess-iris-dataset/Dockerfile .
+docker build -t training-job -f docker/train-iris-classifier/Dockerfile .
+
+# Run preprocessing
+docker run \
+  -v $(pwd)/.data:/app/.data \
+  -v $(pwd)/configs:/app/configs \
+  preprocessing-job --config configs/iris_mlp_classifier.json
 
 # Run training (mount data, models, and configs; point at local MLflow)
-# NOTE: Configs are baked into the image at build time, but we also mount the configs dir to expose new config files. 
+# NOTE: Configs are baked into the image at build time, but we also mount the configs dir to expose new config files.
 docker run \
   -v $(pwd)/.data:/app/.data \
   -v $(pwd)/.models:/app/.models \
@@ -91,8 +98,9 @@ docker run --gpus all \
 Run training as a K8s Job on Docker Desktop's built-in cluster. See [k8s/README.md](k8s/README.md) for details.
 
 ```bash
-# Build image (shared with Docker Desktop K8s)
-docker build -t training-job .
+# Build images (shared with Docker Desktop K8s)
+docker build -t preprocessing-job -f docker/preprocess-iris-dataset/Dockerfile .
+docker build -t training-job -f docker/train-iris-classifier/Dockerfile .
 
 # First-time: create volumes, load data, and create config map
 kubectl apply -f k8s/pvcs.yaml
@@ -102,16 +110,14 @@ kubectl cp .data/iris data-loader:/data/iris
 kubectl delete pod data-loader
 kubectl create configmap training-configs --from-file=configs/
 
+# Run preprocessing
+kubectl apply -f k8s/preprocess-iris-dataset.yaml
+kubectl logs job/preprocess-iris-dataset --follow
+kubectl delete job preprocess-iris-dataset
+
 # Submit training job
 kubectl apply -f k8s/train-iris-mlp-classifier.yaml
-
-# Watch logs
 kubectl logs job/train-iris-mlp-classifier --follow
-
-# Check status
-kubectl get jobs
-
-# Clean up
 kubectl delete job train-iris-mlp-classifier
 ```
 
