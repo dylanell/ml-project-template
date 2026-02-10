@@ -16,4 +16,7 @@ COPY scripts/ scripts/
 COPY configs/ configs/
 RUN uv sync --frozen
 
+# Silence git warnings
+ENV GIT_PYTHON_REFRESH=quiet
+
 ENTRYPOINT ["uv", "run", "python", "scripts/train.py"]

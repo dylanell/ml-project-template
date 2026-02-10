@@ -64,21 +64,24 @@ mlflow server --host 0.0.0.0 --port 5000 --allowed-hosts "host.docker.internal:5
 
 ```bash
 # Build the image
-docker build -t ml-project-template .
+docker build -t training-job .
 
-# Run training (mount data + models, point at local MLflow)
+# Run training (mount data, models, and configs; point at local MLflow)
+# NOTE: Configs are baked into the image at build time, but we also mount the configs dir to expose new config files. 
 docker run \
   -v $(pwd)/.data:/app/.data \
   -v $(pwd)/.models:/app/.models \
+  -v $(pwd)/configs:/app/configs \
   -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
-  ml-project-template --config configs/iris_mlp.json
+  training-job --config configs/iris_mlp_classifier.json
 
 # Run with GPU (remote machine)
 docker run --gpus all \
   -v /path/to/data:/app/.data \
   -v /path/to/models:/app/.models \
+  -v /path/to/configs:/app/configs \
   -e MLFLOW_TRACKING_URI=http://mlflow-server:5000 \
-  ml-project-template --config configs/iris_mlp.json
+  training-job --config configs/iris_mlp_classifier.json
 ```
 
 > `host.docker.internal` resolves to the host machine from inside Docker on Mac/Windows. On Linux, add `--add-host=host.docker.internal:host-gateway`.
@@ -89,26 +92,27 @@ Run training as a K8s Job on Docker Desktop's built-in cluster. See [k8s/README.
 
 ```bash
 # Build image (shared with Docker Desktop K8s)
-docker build -t ml-project-template .
+docker build -t training-job .
 
-# First-time: create volumes and load data
+# First-time: create volumes, load data, and create config map
 kubectl apply -f k8s/pvcs.yaml
 kubectl apply -f k8s/data-loader.yaml
 kubectl wait --for=condition=Ready pod/data-loader
 kubectl cp .data/iris data-loader:/data/iris
 kubectl delete pod data-loader
+kubectl create configmap training-configs --from-file=configs/
 
 # Submit training job
-kubectl apply -f k8s/training-job.yaml
+kubectl apply -f k8s/train-iris-mlp-classifier.yaml
 
 # Watch logs
-kubectl logs job/iris-training --follow
+kubectl logs job/train-iris-mlp-classifier --follow
 
 # Check status
 kubectl get jobs
 
 # Clean up
-kubectl delete job iris-training
+kubectl delete job train-iris-mlp-classifier
 ```
 
 ### Training

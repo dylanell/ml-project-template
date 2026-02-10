@@ -17,17 +17,18 @@ uv run python scripts/onboard_iris_dataset.py
 uv run jupyter notebook
 
 # Train a model from config
-uv run python scripts/train.py --config configs/iris_mlp.json
-uv run python scripts/train.py --config configs/iris_gb.json
+uv run python scripts/train.py --config configs/iris_mlp_classifier.json
+uv run python scripts/train.py --config configs/iris_gb_classifier.json
 
 # Start MLflow server (for experiment tracking UI)
 mlflow server --host 0.0.0.0 --port 5000 --allowed-hosts "host.docker.internal:5000,127.0.0.1:5000,localhost:5000"
 
 # Docker
-docker build -t ml-project-template .
+docker build -t training-job .
 docker run -v $(pwd)/.data:/app/.data -v $(pwd)/.models:/app/.models \
+  -v $(pwd)/configs:/app/configs \
   -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
-  ml-project-template --config configs/iris_mlp.json
+  training-job --config configs/iris_mlp_classifier.json
 
 # Kubernetes (local Docker Desktop) — first-time setup
 kubectl apply -f k8s/pvcs.yaml
@@ -35,11 +36,12 @@ kubectl apply -f k8s/data-loader.yaml
 kubectl wait --for=condition=Ready pod/data-loader
 kubectl cp .data/iris data-loader:/data/iris
 kubectl delete pod data-loader
+kubectl create configmap training-configs --from-file=configs/
 
 # Kubernetes — run training
-kubectl apply -f k8s/training-job.yaml
-kubectl logs job/iris-training --follow
-kubectl delete job iris-training
+kubectl apply -f k8s/train-iris-mlp-classifier.yaml
+kubectl logs job/train-iris-mlp-classifier --follow
+kubectl delete job train-iris-mlp-classifier
 ```
 
 ## Architecture
