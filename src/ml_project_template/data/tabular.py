@@ -25,9 +25,9 @@ class TabularDataset(BaseDataset):
     label_encoder: LabelEncoder | None = None
 
     @classmethod
-    def from_csv(cls, path: str, target_column: str) -> TabularDataset:
-        """Load dataset from CSV file."""
-        df = pd.read_csv(path)
+    def from_csv(cls, path: str, target_column: str, storage_options: dict | None = None) -> TabularDataset:
+        """Load dataset from CSV file (local or S3)."""
+        df = pd.read_csv(path, storage_options=storage_options or {})
 
         feature_names = [col for col in df.columns if col != target_column]
         X = df[feature_names].values

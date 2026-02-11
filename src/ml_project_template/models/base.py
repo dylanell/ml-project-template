@@ -5,6 +5,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import functools
 import inspect
+import os
+import tempfile
 import numpy as np
 from typing import Union, Any, Optional
 
@@ -120,8 +122,24 @@ class BaseModel(ABC):
 
             # Save model artifact
             if model_path:
-                saved_path = self.save(model_path)
-                mlflow.log_artifact(saved_path)
+                if model_path.startswith("s3://"):
+                    with tempfile.TemporaryDirectory() as tmp_dir:
+                        saved_path = self._save_to_s3(model_path, tmp_dir)
+                        mlflow.log_artifact(saved_path)
+                else:
+                    saved_path = self.save(model_path)
+                    mlflow.log_artifact(saved_path)
+
+    def _save_to_s3(self, s3_path: str, tmp_dir: str) -> str:
+        """Save model to a temp dir, upload to S3, return local path for MLflow logging."""
+        from ml_project_template.utils import get_s3_filesystem
+        fs = get_s3_filesystem()
+        local_path = os.path.join(tmp_dir, os.path.basename(s3_path))
+        saved_path = self.save(local_path)
+        # Upload with the correct extension (e.g. .pt, .joblib)
+        ext = os.path.splitext(saved_path)[1]
+        fs.put(saved_path, f"{s3_path}{ext}")
+        return saved_path
 
     @abstractmethod
     def _fit(self, train_data: Dataset, val_data: Dataset | None = None, **kwargs) -> None:

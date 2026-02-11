@@ -14,6 +14,11 @@ import sys
 
 import numpy as np
 import pandas as pd
+from dotenv import load_dotenv
+
+from ml_project_template.utils import get_storage_options
+
+load_dotenv()
 
 
 def main():
@@ -37,10 +42,11 @@ def main():
     preprocess_cfg = config["preprocessing"]
 
     # Load raw data
+    storage_options = get_storage_options()
     raw_path = data_cfg["path"]
     target_column = data_cfg["target_column"]
     print(f"\n[preprocess] Loading raw data from {raw_path}")
-    df = pd.read_csv(raw_path)
+    df = pd.read_csv(raw_path, storage_options=storage_options)
     print(f"[preprocess] Loaded {len(df)} rows, {len(df.columns)} columns")
 
     # Identify feature columns (everything except target)
@@ -75,8 +81,9 @@ def main():
 
     # Write processed CSV
     output_path = preprocess_cfg["output_path"]
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    df.to_csv(output_path, index=False)
+    if not output_path.startswith("s3://"):
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    df.to_csv(output_path, index=False, storage_options=storage_options)
     print(f"\n[preprocess] Wrote processed data to {output_path}")
     print(f"[preprocess] Done.")
 

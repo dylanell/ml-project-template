@@ -11,8 +11,13 @@ import argparse
 import json
 import sys
 
+from dotenv import load_dotenv
+
 from ml_project_template.data import Dataset
 from ml_project_template.models import ModelRegistry
+from ml_project_template.utils import get_storage_options
+
+load_dotenv()
 
 
 def main():
@@ -38,7 +43,8 @@ def main():
     data_path = preprocess_cfg.get("output_path", data_cfg["path"])
     print(f"\n[train] Loading data from {data_path}")
 
-    dataset = Dataset.from_csv(data_path, target_column=data_cfg["target_column"])
+    storage_options = get_storage_options()
+    dataset = Dataset.from_csv(data_path, target_column=data_cfg["target_column"], storage_options=storage_options)
     train_data, val_data = dataset.split(
         test_size=data_cfg.get("test_size", 0.2),
         random_state=data_cfg.get("random_state", 42),

@@ -60,6 +60,21 @@ Run the following in a terminal then navigate to [http://0.0.0.0:5000](http://0.
 mlflow server --host 0.0.0.0 --port 5000 --allowed-hosts "host.docker.internal:5000,127.0.0.1:5000,localhost:5000"
 ```
 
+### Run MinIO Locally (Local S3 Storage)
+
+Run the following in a terminal to spin up a MinIO container with S3 API port 9000, web console port 9001, and a docker volume hen navigate to [http://localhost:7001](http://localhost:7001) and login with `minioadmin/minioadmin`.
+
+```
+docker run -d \
+  --name minio \
+  -p 7000:7000 \
+  -p 7001:7001 \
+  -v minio-data:/data \
+  minio/minio server /data \
+  --address ":7000" \
+  --console-address ":7001"
+```
+
 ### Docker
 
 ```bash

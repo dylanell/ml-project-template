@@ -69,6 +69,8 @@ src/ml_project_template/
 │   ├── registry.py          # ModelRegistry for model discovery
 │   ├── gb_classifier.py     # Sklearn GradientBoosting wrapper
 │   └── mlp_classifier.py    # PyTorch MLP (MLP nn.Module + MLPClassifier)
+├── utils/
+│   └── io.py                # S3-compatible I/O utilities (get_storage_options, get_s3_filesystem)
 
 configs/                     # Training configs (JSON)
 docker/                                  # Dockerfiles per pipeline stage
@@ -85,7 +87,9 @@ notebooks/                   # R&D notebooks
 ### Data Loading
 ```python
 from ml_project_template.data import Dataset  # Alias for TabularDataset
-dataset = Dataset.from_csv(".data/iris/iris.csv", target_column="species")
+from ml_project_template.utils import get_storage_options
+
+dataset = Dataset.from_csv("s3://data/iris/iris.csv", target_column="species", storage_options=get_storage_options())
 train_data, test_data = dataset.split(test_size=0.2, random_state=42)
 ```
 
@@ -165,4 +169,9 @@ models where `**kwargs` doesn't capture individual params with defaults).
 
 ## Environment Variables
 
+Configured via `.env` file (loaded automatically by `python-dotenv`) or set in the environment directly. In production, these are set by the deployment platform (K8s Secrets, IAM roles, etc.).
+
 - `MLFLOW_TRACKING_URI` - MLflow server URL (default: local `./mlruns`)
+- `S3_ENDPOINT_URL` - S3-compatible endpoint (e.g. `http://localhost:7000` for local MinIO)
+- `AWS_ACCESS_KEY_ID` - S3 access key
+- `AWS_SECRET_ACCESS_KEY` - S3 secret key
