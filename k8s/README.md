@@ -15,9 +15,13 @@ Run preprocessing and training as Kubernetes Jobs on a local Docker Desktop clus
 
 ## First-Time Setup
 
-Create the configs ConfigMap:
+Create the S3 credentials Secret and configs ConfigMap:
 
 ```bash
+source .env && kubectl create secret generic s3-credentials \
+  --from-literal=AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+  --from-literal=AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+
 kubectl create configmap training-configs --from-file=configs/
 ```
 
@@ -51,5 +55,5 @@ kubectl delete job train-iris-gb-classifier
 - A K8s Job runs the container to completion, then stops (unlike a Deployment)
 - Data and model artifacts are stored in S3 (MinIO locally), not on PVCs — pipeline stages read/write via the S3 API
 - Training configs are stored in a ConfigMap and mounted at `/app/configs`, overriding the baked-in defaults from the Docker image
-- S3 and MLflow credentials are passed to Jobs via environment variables (set in the Job manifests)
+- S3 credentials (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) are stored in a K8s Secret (`s3-credentials`) and injected via `envFrom`. Endpoint URLs are plain env vars in the manifests
 - `backoffLimit: 0` means failed Jobs are not retried — investigate the error instead

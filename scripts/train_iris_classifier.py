@@ -5,6 +5,7 @@ the model specified in the config.
 
 Usage:
     uv run python scripts/train_iris_classifier.py --config configs/iris_mlp_classifier.json
+    uv run python scripts/train_iris_classifier.py --config configs/iris_gb_classifier.json
 """
 
 import argparse

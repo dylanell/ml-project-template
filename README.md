@@ -80,16 +80,22 @@ docker build -t training-job -f docker/train-iris-classifier/Dockerfile .
 
 # Run preprocessing (reads/writes data via S3)
 docker run --env-file .env \
+  -e S3_ENDPOINT_URL=http://host.docker.internal:7000 \
+  -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
+  -e MLFLOW_S3_ENDPOINT_URL=http://host.docker.internal:7000 \
   -v $(pwd)/configs:/app/configs \
   preprocessing-job --config configs/iris_mlp_classifier.json
 
 # Run training (reads data via S3, saves model to S3, logs to MLflow)
 docker run --env-file .env \
+  -e S3_ENDPOINT_URL=http://host.docker.internal:7000 \
+  -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
+  -e MLFLOW_S3_ENDPOINT_URL=http://host.docker.internal:7000 \
   -v $(pwd)/configs:/app/configs \
   training-job --config configs/iris_mlp_classifier.json
 ```
 
-> `--env-file .env` passes S3 and MLflow credentials to the container. For containers to reach host services (MinIO, MLflow), use `host.docker.internal` URLs in `.env` (resolves to host on Mac/Windows; on Linux add `--add-host=host.docker.internal:host-gateway`).
+> `--env-file .env` loads S3 and MLflow credentials. The `-e` flags override the endpoint URLs to use `host.docker.internal`, which resolves to the host machine from inside Docker containers (Mac/Windows). On Linux, add `--add-host=host.docker.internal:host-gateway` to the `docker run` command.
 
 ### Kubernetes (Local)
 
@@ -100,7 +106,10 @@ Run training as a K8s Job on Docker Desktop's built-in cluster. See [k8s/README.
 docker build -t preprocessing-job -f docker/preprocess-iris-dataset/Dockerfile .
 docker build -t training-job -f docker/train-iris-classifier/Dockerfile .
 
-# First-time: create config map
+# First-time: create secret and config map
+source .env && kubectl create secret generic s3-credentials \
+  --from-literal=AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+  --from-literal=AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
 kubectl create configmap training-configs --from-file=configs/
 
 # Run preprocessing

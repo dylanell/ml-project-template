@@ -12,19 +12,19 @@ spec:
           image: preprocessing-job:latest
           imagePullPolicy: Never
           args: ["--config", "configs/iris_mlp_classifier.json"]
+          envFrom:
+            - secretRef:
+                name: s3-credentials
           env:
             - name: PYTHONUNBUFFERED
               value: "1"
+            - name: S3_ENDPOINT_URL
+              value: "http://host.docker.internal:7000"
           volumeMounts:
             - name: configs
               mountPath: /app/configs
               readOnly: true
-            - name: data
-              mountPath: /app/.data
       volumes:
         - name: configs
           configMap:
             name: training-configs
-        - name: data
-          persistentVolumeClaim:
-            claimName: training-data

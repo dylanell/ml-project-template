@@ -34,14 +34,23 @@ docker build -t preprocessing-job -f docker/preprocess-iris-dataset/Dockerfile .
 docker build -t training-job -f docker/train-iris-classifier/Dockerfile .
 
 docker run --env-file .env \
+  -e S3_ENDPOINT_URL=http://host.docker.internal:7000 \
+  -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
+  -e MLFLOW_S3_ENDPOINT_URL=http://host.docker.internal:7000 \
   -v $(pwd)/configs:/app/configs \
   preprocessing-job --config configs/iris_mlp_classifier.json
 
 docker run --env-file .env \
+  -e S3_ENDPOINT_URL=http://host.docker.internal:7000 \
+  -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
+  -e MLFLOW_S3_ENDPOINT_URL=http://host.docker.internal:7000 \
   -v $(pwd)/configs:/app/configs \
   training-job --config configs/iris_mlp_classifier.json
 
 # Kubernetes (local Docker Desktop) — first-time setup
+source .env && kubectl create secret generic s3-credentials \
+  --from-literal=AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+  --from-literal=AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
 kubectl create configmap training-configs --from-file=configs/
 
 # Kubernetes — run preprocessing
