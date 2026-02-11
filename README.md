@@ -52,28 +52,24 @@ Configure VSCode notebooks (add to .vscode/settings.json)
 
 ## Quick Start
 
-### Run MLFlow Locally
+### Local Services (MinIO + MLflow)
 
-Run the following in a terminal then navigate to [http://0.0.0.0:5000](http://0.0.0.0:5000).
+Start MinIO (S3-compatible storage) and MLflow (experiment tracking) via Docker Compose:
 
+```bash
+docker compose up -d
 ```
-mlflow server --host 0.0.0.0 --port 5000 --allowed-hosts "host.docker.internal:5000,127.0.0.1:5000,localhost:5000"
+
+- **MLflow UI:** [http://localhost:5000](http://localhost:5000)
+- **MinIO Console:** [http://localhost:7001](http://localhost:7001) (login: `minioadmin`/`minioadmin`)
+
+Create `data` and `models` buckets in the MinIO console, then onboard data:
+
+```bash
+uv run python scripts/onboard_iris_dataset.py --dest s3://data/iris/
 ```
 
-### Run MinIO Locally (Local S3 Storage)
-
-Run the following in a terminal to spin up a MinIO container with S3 API port 9000, web console port 9001, and a docker volume hen navigate to [http://localhost:7001](http://localhost:7001) and login with `minioadmin/minioadmin`.
-
-```
-docker run -d \
-  --name minio \
-  -p 7000:7000 \
-  -p 7001:7001 \
-  -v minio-data:/data \
-  minio/minio server /data \
-  --address ":7000" \
-  --console-address ":7001"
-```
+Stop services with `docker compose down`. Data persists in Docker volumes across restarts.
 
 ### Docker
 
@@ -82,31 +78,18 @@ docker run -d \
 docker build -t preprocessing-job -f docker/preprocess-iris-dataset/Dockerfile .
 docker build -t training-job -f docker/train-iris-classifier/Dockerfile .
 
-# Run preprocessing
-docker run \
-  -v $(pwd)/.data:/app/.data \
+# Run preprocessing (reads/writes data via S3)
+docker run --env-file .env \
   -v $(pwd)/configs:/app/configs \
   preprocessing-job --config configs/iris_mlp_classifier.json
 
-# Run training (mount data, models, and configs; point at local MLflow)
-# NOTE: Configs are baked into the image at build time, but we also mount the configs dir to expose new config files.
-docker run \
-  -v $(pwd)/.data:/app/.data \
-  -v $(pwd)/.models:/app/.models \
+# Run training (reads data via S3, saves model to S3, logs to MLflow)
+docker run --env-file .env \
   -v $(pwd)/configs:/app/configs \
-  -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
-  training-job --config configs/iris_mlp_classifier.json
-
-# Run with GPU (remote machine)
-docker run --gpus all \
-  -v /path/to/data:/app/.data \
-  -v /path/to/models:/app/.models \
-  -v /path/to/configs:/app/configs \
-  -e MLFLOW_TRACKING_URI=http://mlflow-server:5000 \
   training-job --config configs/iris_mlp_classifier.json
 ```
 
-> `host.docker.internal` resolves to the host machine from inside Docker on Mac/Windows. On Linux, add `--add-host=host.docker.internal:host-gateway`.
+> `--env-file .env` passes S3 and MLflow credentials to the container. For containers to reach host services (MinIO, MLflow), use `host.docker.internal` URLs in `.env` (resolves to host on Mac/Windows; on Linux add `--add-host=host.docker.internal:host-gateway`).
 
 ### Kubernetes (Local)
 
@@ -117,12 +100,7 @@ Run training as a K8s Job on Docker Desktop's built-in cluster. See [k8s/README.
 docker build -t preprocessing-job -f docker/preprocess-iris-dataset/Dockerfile .
 docker build -t training-job -f docker/train-iris-classifier/Dockerfile .
 
-# First-time: create volumes, load data, and create config map
-kubectl apply -f k8s/pvcs.yaml
-kubectl apply -f k8s/data-loader.yaml
-kubectl wait --for=condition=Ready pod/data-loader
-kubectl cp .data/iris data-loader:/data/iris
-kubectl delete pod data-loader
+# First-time: create config map
 kubectl create configmap training-configs --from-file=configs/
 
 # Run preprocessing

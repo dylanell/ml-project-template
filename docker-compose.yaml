@@ -1,0 +1,25 @@
+services:
+  minio:
+    image: minio/minio
+    ports:
+      - "7000:7000"
+      - "7001:7001"
+    volumes:
+      - minio-data:/data
+    command: server /data --address ":7000" --console-address ":7001"
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow
+    ports:
+      - "5000:5000"
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --allowed-hosts "host.docker.internal:5000,127.0.0.1:5000,localhost:5000"
+    volumes:
+      - mlflow-data:/mlflow
+
+volumes:
+  minio-data:
+  mlflow-data:

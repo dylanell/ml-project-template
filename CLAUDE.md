@@ -12,8 +12,14 @@ ML project template for model R&D and API serving. Uses uv for package managemen
 # Setup
 uv venv && uv pip install -e "."
 
-# Run scripts/notebooks
+# Start local services (MinIO + MLflow)
+docker compose up -d
+
+# Onboard data (local or S3)
 uv run python scripts/onboard_iris_dataset.py
+uv run python scripts/onboard_iris_dataset.py --dest s3://data/iris/
+
+# Run scripts/notebooks
 uv run jupyter notebook
 
 # Preprocess data
@@ -23,27 +29,19 @@ uv run python scripts/preprocess_iris_dataset.py --config configs/iris_mlp_class
 uv run python scripts/train_iris_classifier.py --config configs/iris_mlp_classifier.json
 uv run python scripts/train_iris_classifier.py --config configs/iris_gb_classifier.json
 
-# Start MLflow server (for experiment tracking UI)
-mlflow server --host 0.0.0.0 --port 5000 --allowed-hosts "host.docker.internal:5000,127.0.0.1:5000,localhost:5000"
-
 # Docker
 docker build -t preprocessing-job -f docker/preprocess-iris-dataset/Dockerfile .
 docker build -t training-job -f docker/train-iris-classifier/Dockerfile .
 
-docker run -v $(pwd)/.data:/app/.data -v $(pwd)/configs:/app/configs \
+docker run --env-file .env \
+  -v $(pwd)/configs:/app/configs \
   preprocessing-job --config configs/iris_mlp_classifier.json
 
-docker run -v $(pwd)/.data:/app/.data -v $(pwd)/.models:/app/.models \
+docker run --env-file .env \
   -v $(pwd)/configs:/app/configs \
-  -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
   training-job --config configs/iris_mlp_classifier.json
 
 # Kubernetes (local Docker Desktop) — first-time setup
-kubectl apply -f k8s/pvcs.yaml
-kubectl apply -f k8s/data-loader.yaml
-kubectl wait --for=condition=Ready pod/data-loader
-kubectl cp .data/iris data-loader:/data/iris
-kubectl delete pod data-loader
 kubectl create configmap training-configs --from-file=configs/
 
 # Kubernetes — run preprocessing
