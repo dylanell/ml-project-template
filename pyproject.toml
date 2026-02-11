@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "boto3",
     "ipykernel>=7.2.0",
     "joblib",
     "lightning>=2.6.1",
@@ -14,7 +15,7 @@ dependencies = [
     "pandas",
     "python-dotenv",
     "pip>=26.0.1",
-    "s3fs",
+    "s3fs>=2026",
     "scikit-learn",
     "torch>=2.0,<2.3; sys_platform == 'darwin'",
     "torch>=2.0; sys_platform == 'linux'",
