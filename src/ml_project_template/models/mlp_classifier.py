@@ -6,7 +6,6 @@ from typing import Union, Any, Optional
 
 import torch
 import torch.nn as nn
-import mlflow
 from tqdm import tqdm
 
 from lightning.fabric.accelerators import Accelerator
@@ -111,7 +110,7 @@ class MLPClassifier(BasePytorchModel):
                 cum_train_loss += loss.item()
             train_loss = cum_train_loss / len(train_dataloader)
 
-            mlflow.log_metric("train_loss", train_loss, step=epoch)
+            self.log_metric("train_loss", train_loss, step=epoch)
 
             # Validate
             if (val_data is not None) and ((epoch + 1) % val_frequency == 0):
@@ -124,7 +123,7 @@ class MLPClassifier(BasePytorchModel):
                         cum_val_loss += loss.item()
                 val_loss = cum_val_loss / len(val_dataloader)
 
-                mlflow.log_metric("val_loss", val_loss, step=epoch)
+                self.log_metric("val_loss", val_loss, step=epoch)
 
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
@@ -141,9 +140,9 @@ class MLPClassifier(BasePytorchModel):
             pbar.set_description(status)
 
         # Log training parameters
-        mlflow.log_param("lr", lr)
-        mlflow.log_param("batch_size", batch_size)
-        mlflow.log_param("max_epochs", max_epochs)
-        mlflow.log_param("val_frequency", val_frequency)
-        mlflow.log_param("patience", patience)
+        self.log_param("lr", lr)
+        self.log_param("batch_size", batch_size)
+        self.log_param("max_epochs", max_epochs)
+        self.log_param("val_frequency", val_frequency)
+        self.log_param("patience", patience)
 
