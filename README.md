@@ -132,9 +132,11 @@ source .env && kubectl create secret generic s3-credentials --namespace argo \
   --from-literal=AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
 kubectl create configmap training-configs --namespace argo --from-file=configs/
 
-# Submit a pipeline
-argo submit -n argo argo/iris-mlp-classifier-pipeline.yaml --watch
-argo submit -n argo argo/iris-gb-classifier-pipeline.yaml --watch
+# Submit a pipeline (uses MLP config by default)
+argo submit -n argo argo/iris-classifier-pipeline.yaml --watch
+
+# Or specify a different config
+argo submit -n argo argo/iris-classifier-pipeline.yaml -p config=configs/iris_gb_classifier.json --watch
 
 # Argo UI (optional)
 kubectl port-forward -n argo svc/argo-server 2746:2746

@@ -41,8 +41,11 @@ kubectl create configmap training-configs --namespace argo --from-file=configs/ 
 ### Submit a Pipeline
 
 ```bash
-argo submit -n argo argo/iris-mlp-classifier-pipeline.yaml --watch
-argo submit -n argo argo/iris-gb-classifier-pipeline.yaml --watch
+# Uses MLP config by default
+argo submit -n argo argo/iris-classifier-pipeline.yaml --watch
+
+# Or specify a different config via -p
+argo submit -n argo argo/iris-classifier-pipeline.yaml -p config=configs/iris_gb_classifier.json --watch
 ```
 
 ### Argo UI (Optional)
@@ -55,6 +58,7 @@ Then open [https://localhost:2746](https://localhost:2746) for a visual workflow
 
 ## How It Works
 
+- The pipeline accepts a `config` parameter (`-p config=...`) so one workflow file handles any model config
 - A Workflow defines a DAG of pipeline steps. Each step runs as a pod, with Argo automatically sequencing based on `dependencies`
 - Workflows run in the `argo` namespace, so the S3 Secret and configs ConfigMap must be created there separately from the `default` namespace
 - `generateName` allows resubmitting without deleting previous runs — each run gets a unique suffix

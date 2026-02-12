@@ -72,8 +72,8 @@ source .env && kubectl create secret generic s3-credentials --namespace argo \
 kubectl create configmap training-configs --namespace argo --from-file=configs/
 
 # Argo Workflows — run pipeline (preprocess → train)
-argo submit -n argo argo/iris-mlp-classifier-pipeline.yaml --watch
-argo submit -n argo argo/iris-gb-classifier-pipeline.yaml --watch
+argo submit -n argo argo/iris-classifier-pipeline.yaml --watch
+argo submit -n argo argo/iris-classifier-pipeline.yaml -p config=configs/iris_gb_classifier.json --watch
 ```
 
 ## Architecture

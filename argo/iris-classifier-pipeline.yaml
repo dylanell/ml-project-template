@@ -1,16 +1,20 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
-  generateName: iris-gb-classifier-pipeline-
+  generateName: iris-classifier-pipeline-
 spec:
   entrypoint: pipeline
+  arguments:
+    parameters:
+      - name: config
+        value: configs/iris_mlp_classifier.json
   templates:
     - name: preprocess
       container:
         image: preprocessing-job:latest
         imagePullPolicy: Never
         command: ["uv", "run", "python", "scripts/preprocess_iris_dataset.py"]
-        args: ["--config", "configs/iris_gb_classifier.json"]
+        args: ["--config", "{{workflow.parameters.config}}"]
         envFrom:
           - secretRef:
               name: s3-credentials
@@ -33,7 +37,7 @@ spec:
         image: training-job:latest
         imagePullPolicy: Never
         command: ["uv", "run", "python", "scripts/train_iris_classifier.py"]
-        args: ["--config", "configs/iris_gb_classifier.json"]
+        args: ["--config", "{{workflow.parameters.config}}"]
         envFrom:
           - secretRef:
               name: s3-credentials
