@@ -62,6 +62,18 @@ kubectl delete job preprocess-iris-dataset
 kubectl apply -f k8s/train-iris-mlp-classifier.yaml
 kubectl logs job/train-iris-mlp-classifier --follow
 kubectl delete job train-iris-mlp-classifier
+
+# Argo Workflows — first-time setup
+kubectl create namespace argo
+kubectl apply -n argo --server-side -f https://github.com/argoproj/argo-workflows/releases/latest/download/quick-start-minimal.yaml
+source .env && kubectl create secret generic s3-credentials --namespace argo \
+  --from-literal=AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+  --from-literal=AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+kubectl create configmap training-configs --namespace argo --from-file=configs/
+
+# Argo Workflows — run pipeline (preprocess → train)
+argo submit -n argo k8s/iris-mlp-classifier-pipeline.yaml --watch
+argo submit -n argo k8s/iris-gb-classifier-pipeline.yaml --watch
 ```
 
 ## Architecture
@@ -83,6 +95,7 @@ configs/                     # Training configs (JSON)
 docker/                                  # Dockerfiles per pipeline stage
 ├── preprocess-iris-dataset/Dockerfile   # Preprocessing image
 └── train-iris-classifier/Dockerfile     # Training image
+k8s/                         # K8s Job manifests + Argo Workflow pipelines
 .data/                       # Raw datasets (gitignored)
 .models/                     # Saved model artifacts (gitignored)
 scripts/                     # Data onboarding, preprocessing + training scripts
