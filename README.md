@@ -117,6 +117,12 @@ kubectl port-forward -n argo svc/argo-server 2746:2746
 # Then open https://localhost:2746
 ```
 
+To update configs after changing them locally:
+
+```bash
+kubectl create configmap training-configs --namespace argo --from-file=configs/ --dry-run=client -o yaml | kubectl apply -f -
+```
+
 ## ToDo
 
 - [ ] **Add tests.** No tests exist to enforce the BaseModel contract. A small suite that exercises create, train, predict, save, load, predict-again for each model would catch most regressions.
