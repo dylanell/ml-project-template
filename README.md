@@ -91,32 +91,6 @@ docker run --env-file .env \
 
 > `--env-file .env` loads S3 and MLflow credentials. The `-e` flags override the endpoint URLs to use `host.docker.internal`, which resolves to the host machine from inside Docker containers (Mac/Windows). On Linux, add `--add-host=host.docker.internal:host-gateway` to the `docker run` command.
 
-### Kubernetes (Local)
-
-Run training as a K8s Job on Docker Desktop's built-in cluster. See [k8s/README.md](k8s/README.md) for details.
-
-```bash
-# Build images (shared with Docker Desktop K8s)
-docker build -t preprocessing-job -f docker/preprocess-iris-dataset/Dockerfile .
-docker build -t training-job -f docker/train-iris-classifier/Dockerfile .
-
-# First-time: create secret and config map
-source .env && kubectl create secret generic s3-credentials \
-  --from-literal=AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-  --from-literal=AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-kubectl create configmap training-configs --from-file=configs/
-
-# Run preprocessing
-kubectl apply -f k8s/preprocess-iris-dataset.yaml
-kubectl logs job/preprocess-iris-dataset --follow
-kubectl delete job preprocess-iris-dataset
-
-# Submit training job
-kubectl apply -f k8s/train-iris-mlp-classifier.yaml
-kubectl logs job/train-iris-mlp-classifier --follow
-kubectl delete job train-iris-mlp-classifier
-```
-
 ### Argo Workflows (Local)
 
 Run the full pipeline (preprocess → train) as an Argo Workflow DAG on Docker Desktop's K8s cluster. See [argo/README.md](argo/README.md) for details.

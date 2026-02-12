@@ -47,22 +47,6 @@ docker run --env-file .env \
   -v $(pwd)/configs:/app/configs \
   training-job --config configs/iris_mlp_classifier.json
 
-# Kubernetes (local Docker Desktop) — first-time setup
-source .env && kubectl create secret generic s3-credentials \
-  --from-literal=AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-  --from-literal=AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-kubectl create configmap training-configs --from-file=configs/
-
-# Kubernetes — run preprocessing
-kubectl apply -f k8s/preprocess-iris-dataset.yaml
-kubectl logs job/preprocess-iris-dataset --follow
-kubectl delete job preprocess-iris-dataset
-
-# Kubernetes — run training
-kubectl apply -f k8s/train-iris-mlp-classifier.yaml
-kubectl logs job/train-iris-mlp-classifier --follow
-kubectl delete job train-iris-mlp-classifier
-
 # Argo Workflows — first-time setup
 kubectl create namespace argo
 kubectl apply -n argo --server-side -f https://github.com/argoproj/argo-workflows/releases/latest/download/quick-start-minimal.yaml
@@ -95,7 +79,7 @@ configs/                     # Training configs (JSON)
 docker/                                  # Dockerfiles per pipeline stage
 ├── preprocess-iris-dataset/Dockerfile   # Preprocessing image
 └── train-iris-classifier/Dockerfile     # Training image
-k8s/                         # K8s Job manifests + Argo Workflow pipelines
+argo/                        # Argo Workflow pipelines
 .data/                       # Raw datasets (gitignored)
 .models/                     # Saved model artifacts (gitignored)
 scripts/                     # Data onboarding, preprocessing + training scripts
