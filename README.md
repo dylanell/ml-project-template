@@ -125,7 +125,7 @@ kubectl delete job train-iris-mlp-classifier
 
 ### Argo Workflows (Local)
 
-Run the full pipeline (preprocess → train) as an Argo Workflow DAG on Docker Desktop's K8s cluster. See [k8s/README.md](k8s/README.md) for details.
+Run the full pipeline (preprocess → train) as an Argo Workflow DAG on Docker Desktop's K8s cluster. See [argo/README.md](argo/README.md) for details.
 
 ```bash
 # First-time: install Argo Workflows
@@ -139,8 +139,8 @@ source .env && kubectl create secret generic s3-credentials --namespace argo \
 kubectl create configmap training-configs --namespace argo --from-file=configs/
 
 # Submit a pipeline
-argo submit -n argo k8s/iris-mlp-classifier-pipeline.yaml --watch
-argo submit -n argo k8s/iris-gb-classifier-pipeline.yaml --watch
+argo submit -n argo argo/iris-mlp-classifier-pipeline.yaml --watch
+argo submit -n argo argo/iris-gb-classifier-pipeline.yaml --watch
 
 # Argo UI (optional)
 kubectl port-forward -n argo svc/argo-server 2746:2746
