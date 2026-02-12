@@ -238,6 +238,7 @@ When adding a new model, add matching tests in `tests/test_models.py` following 
 - [x] **Add tests.** Test suite in `tests/` covers model lifecycle, registry, and dataset operations.
 - [ ] **Save model metadata alongside artifacts.** Loading a model currently requires knowing the exact init args. Save the params dict next to the weights so `load()` can reconstruct the model without the caller needing to know the architecture.
 - [x] **Decouple MLflow from the training path.** `train(tracking=False)` skips all MLflow calls. Models use `self.log_param()`/`self.log_metric()` helpers that respect the flag.
+- [x] **Add CI/CD.** GitHub Actions workflow runs tests on PRs to main, with branch protection requiring checks to pass.
 - [ ] **Move BasePytorchModel to its own file.** `base.py` imports torch and lightning unconditionally, so even sklearn-only usage pays for the full PyTorch import chain. Splitting BasePytorchModel out would fix this.
 - [ ] **Document the `__init_subclass__` param capture for onboarding.** The auto-capture of `_model_params` is non-obvious to newcomers. Add an explanation to the contributing guide or model-authoring docs.
 - [ ] **Add central seed management for reproducibility.** No way to set random seeds (torch, numpy, python) from a central place. "Can't reproduce your result" will be a recurring team issue without this.
