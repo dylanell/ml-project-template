@@ -44,12 +44,6 @@ Configure VSCode notebooks (add to .vscode/settings.json)
 }
 ```
 
-## Project Structure
-
-```
-
-```
-
 ## Quick Start
 
 ### Local Services (MinIO + MLflow)
@@ -147,26 +141,6 @@ kubectl port-forward -n argo svc/argo-server 2746:2746
 # Then open https://localhost:2746
 ```
 
-### Training
-
-```python
-
-```
-
-### Inference
-
-```python
-
-```
-
-### API Server
-
-```
-
-```
-
-### Testing
-
 ## ToDo
 
 - [ ] **Add tests.** No tests exist to enforce the BaseModel contract. A small suite that exercises create, train, predict, save, load, predict-again for each model would catch most regressions.
@@ -176,4 +150,5 @@ kubectl port-forward -n argo svc/argo-server 2746:2746
 - [ ] **Document the `__init_subclass__` param capture for onboarding.** The auto-capture of `_model_params` is non-obvious to newcomers. Add an explanation to the contributing guide or model-authoring docs.
 - [ ] **Add central seed management for reproducibility.** No way to set random seeds (torch, numpy, python) from a central place. "Can't reproduce your result" will be a recurring team issue without this.
 - [ ] **Consider decorator-based model registration.** Currently adding a model requires editing two files (model file + registry.py), which causes merge conflicts when multiple people add models simultaneously.
+- [ ] **Add API serving.** FastAPI server for model inference. Load a saved model by name, expose a `/predict` endpoint, containerize for deployment.
 - [ ] **Support regression tasks in Dataset.** `y` is always cast to `long()` and `LabelEncoder` is built in, so the data layer is classification-only. Regression would need a new dataset class or modifications.
