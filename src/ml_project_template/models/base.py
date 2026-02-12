@@ -85,18 +85,29 @@ class BaseModel(ABC):
         """Return model parameters for logging. Automatically populated from __init__ args."""
         return self._model_params
 
+    def log_param(self, key: str, value) -> None:
+        """Log a parameter to MLflow if tracking is enabled."""
+        if self._tracking:
+            mlflow.log_param(key, value)
+
+    def log_metric(self, key: str, value: float, step: int | None = None) -> None:
+        """Log a metric to MLflow if tracking is enabled."""
+        if self._tracking:
+            mlflow.log_metric(key, value, step=step)
+
     def train(
         self,
         *,
-        experiment_name: str,
+        experiment_name: str = "",
         train_data: Dataset,
         val_data: Dataset | None = None,
         run_name: str | None = None,
         model_path: str | None = None,
         extra_params: dict | None = None,
+        tracking: bool = True,
         **train_kwargs,
     ) -> None:
-        """Full training pipeline with MLflow tracking.
+        """Full training pipeline with optional MLflow tracking.
 
         Args:
             experiment_name: MLflow experiment name
@@ -105,8 +116,17 @@ class BaseModel(ABC):
             run_name: Optional MLflow run name
             model_path: Optional path to save model artifact
             extra_params: Optional extra params to log (e.g. data/preprocessing config)
+            tracking: Whether to enable MLflow tracking (default True)
             **train_kwargs: Model-specific training arguments passed to _fit()
         """
+        self._tracking = tracking
+
+        if not tracking:
+            self._fit(train_data, val_data=val_data, **train_kwargs)
+            if model_path:
+                self.save(model_path)
+            return
+
         mlflow.set_experiment(experiment_name)
         with mlflow.start_run(run_name=run_name):
             # Log model params
@@ -117,7 +137,7 @@ class BaseModel(ABC):
                 mlflow.log_params(extra_params)
 
             # Model-specific training
-            # Training params manually logged 
+            # Training params manually logged
             self._fit(train_data, val_data=val_data, **train_kwargs)
 
             # Save model artifact

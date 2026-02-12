@@ -10,7 +10,10 @@ ML project template for model R&D and API serving. Uses uv for package managemen
 
 ```bash
 # Setup
-uv venv && uv pip install -e "."
+uv venv && uv pip install -e "." --group dev
+
+# Run tests
+uv run pytest tests/ -v
 
 # Start local services (MinIO + MLflow)
 docker compose up -d
