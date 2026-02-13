@@ -49,13 +49,16 @@ src/ml_project_template/
 │   ├── registry.py          # ModelRegistry for model discovery
 │   ├── gb_classifier.py     # Sklearn GradientBoosting wrapper
 │   └── mlp_classifier.py    # PyTorch MLP (MLP nn.Module + MLPClassifier)
+├── serving/
+│   └── iris_classifier.py    # FastAPI app factory for iris classification
 ├── utils/
 │   └── io.py                # S3-compatible I/O utilities (get_storage_options, get_s3_filesystem)
 
 configs/                     # Training configs (JSON)
 docker/                                  # Dockerfiles per pipeline stage
 ├── preprocess-iris-dataset/Dockerfile   # Preprocessing image
-└── train-iris-classifier/Dockerfile     # Training image
+├── train-iris-classifier/Dockerfile     # Training image
+└── serve-iris-classifier/Dockerfile     # Serving image
 argo/                        # Argo Workflow pipelines
 scripts/                     # Data onboarding, preprocessing + training scripts
 notebooks/                   # R&D notebooks
@@ -187,6 +190,36 @@ docker run --env-file .env \
 
 > `--env-file .env` loads S3 and MLflow credentials. The `-e` flags override the endpoint URLs to use `host.docker.internal`, which resolves to the host machine from inside Docker containers (Mac/Windows). On Linux, add `--add-host=host.docker.internal:host-gateway` to the `docker run` command.
 
+### Model Serving
+
+Serve a trained model via FastAPI. The server reads the same JSON config used for training to determine which model to load.
+
+```bash
+# Local (requires a trained model saved to the configured model_path)
+uv run python scripts/serve_iris_classifier.py --config configs/iris_mlp_classifier.json
+
+# Docker
+docker build -t serving-job -f docker/serve-iris-classifier/Dockerfile .
+
+docker run --env-file .env \
+  -e S3_ENDPOINT_URL=http://host.docker.internal:7000 \
+  -p 8000:8000 \
+  -v $(pwd)/configs:/app/configs \
+  serving-job --config configs/iris_mlp_classifier.json
+```
+
+Test the endpoints:
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8000/info
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"features": [[5.1, 3.5, 1.4, 0.2]]}'
+```
+
+Auto-generated API docs are available at `http://localhost:8000/docs`.
+
 ### Argo Workflows (Local)
 
 Run the full pipeline (preprocess → train) as an Argo Workflow DAG on Docker Desktop's K8s cluster. See [argo/README.md](argo/README.md) for details.
@@ -243,5 +276,5 @@ When adding a new model, add matching tests in `tests/test_models.py` following 
 - [ ] **Document the `__init_subclass__` param capture for onboarding.** The auto-capture of `_model_params` is non-obvious to newcomers. Add an explanation to the contributing guide or model-authoring docs.
 - [ ] **Add central seed management for reproducibility.** No way to set random seeds (torch, numpy, python) from a central place. "Can't reproduce your result" will be a recurring team issue without this.
 - [ ] **Consider decorator-based model registration.** Currently adding a model requires editing two files (model file + registry.py), which causes merge conflicts when multiple people add models simultaneously.
-- [ ] **Add API serving.** FastAPI server for model inference. Load a saved model by name, expose a `/predict` endpoint, containerize for deployment.
+- [x] **Add API serving.** FastAPI server for model inference. Load a saved model from config, expose `/health`, `/info`, and `/predict` endpoints, containerized for deployment.
 - [ ] **Support regression tasks in Dataset.** `y` is always cast to `long()` and `LabelEncoder` is built in, so the data layer is classification-only. Regression would need a new dataset class or modifications.

@@ -32,9 +32,14 @@ uv run python scripts/preprocess_iris_dataset.py --config configs/iris_mlp_class
 uv run python scripts/train_iris_classifier.py --config configs/iris_mlp_classifier.json
 uv run python scripts/train_iris_classifier.py --config configs/iris_gb_classifier.json
 
+# Serve a trained model
+uv run python scripts/serve_iris_classifier.py --config configs/iris_mlp_classifier.json
+uv run python scripts/serve_iris_classifier.py --config configs/iris_gb_classifier.json
+
 # Docker
 docker build -t preprocessing-job -f docker/preprocess-iris-dataset/Dockerfile .
 docker build -t training-job -f docker/train-iris-classifier/Dockerfile .
+docker build -t serving-job -f docker/serve-iris-classifier/Dockerfile .
 
 docker run --env-file .env \
   -e S3_ENDPOINT_URL=http://host.docker.internal:7000 \
@@ -49,6 +54,12 @@ docker run --env-file .env \
   -e MLFLOW_S3_ENDPOINT_URL=http://host.docker.internal:7000 \
   -v $(pwd)/configs:/app/configs \
   training-job --config configs/iris_mlp_classifier.json
+
+docker run --env-file .env \
+  -e S3_ENDPOINT_URL=http://host.docker.internal:7000 \
+  -p 8000:8000 \
+  -v $(pwd)/configs:/app/configs \
+  serving-job --config configs/iris_mlp_classifier.json
 
 # Argo Workflows — first-time setup
 kubectl create namespace argo
@@ -75,13 +86,16 @@ src/ml_project_template/
 │   ├── registry.py          # ModelRegistry for model discovery
 │   ├── gb_classifier.py     # Sklearn GradientBoosting wrapper
 │   └── mlp_classifier.py    # PyTorch MLP (MLP nn.Module + MLPClassifier)
+├── serving/
+│   └── iris_classifier.py    # FastAPI app factory for iris classification
 ├── utils/
 │   └── io.py                # S3-compatible I/O utilities (get_storage_options, get_s3_filesystem)
 
 configs/                     # Training configs (JSON)
 docker/                                  # Dockerfiles per pipeline stage
 ├── preprocess-iris-dataset/Dockerfile   # Preprocessing image
-└── train-iris-classifier/Dockerfile     # Training image
+├── train-iris-classifier/Dockerfile     # Training image
+└── serve-iris-classifier/Dockerfile     # Serving image
 argo/                        # Argo Workflow pipelines
 .data/                       # Raw datasets (gitignored)
 .models/                     # Saved model artifacts (gitignored)
