@@ -1,5 +1,7 @@
 """Tests for model implementations."""
 
+import json
+import os
 import tempfile
 
 import numpy as np
@@ -21,7 +23,19 @@ class TestMLPClassifier:
         assert preds.shape == (20, 3)
 
         with tempfile.TemporaryDirectory() as tmp:
-            model.save(f"{tmp}/model")
+            saved_path = model.save(f"{tmp}/model")
+
+            # Verify directory structure
+            assert os.path.isdir(saved_path)
+            assert os.path.exists(f"{tmp}/model/config.json")
+            assert os.path.exists(f"{tmp}/model/model.pt")
+
+            with open(f"{tmp}/model/config.json") as f:
+                config = json.load(f)
+            assert config["model_name"] == "mlp_classifier"
+            assert config["model_params"]["input_dim"] == 4
+            assert config["model_params"]["hidden_dim"] == 8
+            assert config["model_params"]["num_classes"] == 3
 
             model2 = MLPClassifier(input_dim=4, hidden_dim=8, num_classes=3)
             model2.load(f"{tmp}/model")
@@ -51,7 +65,18 @@ class TestGBClassifier:
         assert set(preds).issubset({0, 1, 2})
 
         with tempfile.TemporaryDirectory() as tmp:
-            model.save(f"{tmp}/model")
+            saved_path = model.save(f"{tmp}/model")
+
+            # Verify directory structure
+            assert os.path.isdir(saved_path)
+            assert os.path.exists(f"{tmp}/model/config.json")
+            assert os.path.exists(f"{tmp}/model/model.joblib")
+
+            with open(f"{tmp}/model/config.json") as f:
+                config = json.load(f)
+            assert config["model_name"] == "gb_classifier"
+            assert config["model_params"]["n_estimators"] == 10
+            assert config["model_params"]["max_depth"] == 2
 
             model2 = GBClassifier(n_estimators=10, max_depth=2)
             model2.load(f"{tmp}/model")

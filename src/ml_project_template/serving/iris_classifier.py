@@ -1,7 +1,6 @@
 """FastAPI app factory for model serving."""
 
 import os
-import sys
 import tempfile
 
 import numpy as np
@@ -43,31 +42,19 @@ def create_app(config: dict, feature_names: list[str] | None = None, class_names
 
     # Create and load model
     model_cfg = config["model"]
-    model = ModelRegistry.get(model_cfg["name"])(**model_cfg.get("params", {}))
-
     model_path = config["training"]["model_path"]
+
     if model_path.startswith("s3://"):
         from ml_project_template.utils import get_s3_filesystem
         fs = get_s3_filesystem()
 
-        # Find the actual file on S3 (model_path has no extension)
-        matches = fs.glob(f"{model_path}.*")
-        if not matches:
-            print(f"[serve] Error: no model artifact found at {model_path}.*")
-            sys.exit(1)
-        s3_file = matches[0]
-        ext = os.path.splitext(s3_file)[1]
-
-        # Download to temp dir and load
         tmp_dir = tempfile.mkdtemp()
-        local_file = os.path.join(tmp_dir, os.path.basename(s3_file))
-        fs.get(s3_file, local_file)
-        # model.load() expects path without extension
-        local_base = local_file.removesuffix(ext)
-        model.load(local_base)
-        print(f"[serve] Loaded model from {s3_file}")
+        local_path = os.path.join(tmp_dir, os.path.basename(model_path))
+        fs.get(model_path, local_path, recursive=True)
+        model = ModelRegistry.load(local_path)
+        print(f"[serve] Loaded model from {model_path}")
     else:
-        model.load(model_path)
+        model = ModelRegistry.load(model_path)
         print(f"[serve] Loaded model from {model_path}")
 
     num_features = len(feature_names)

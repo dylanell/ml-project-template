@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import os
 from typing import Optional
 import joblib
 import numpy as np
@@ -29,14 +29,16 @@ class GBClassifier(BaseModel):
     def predict(self, X: np.ndarray) -> np.ndarray:
         return self.model.predict(X)
 
-    def save(self, path: str) -> str:
-        """Save model to disk. Returns the actual path saved."""
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        full_path = f"{path}.joblib"
-        joblib.dump(self.model, full_path)
-        return full_path
+    def _save_weights(self, dir_path: str) -> None:
+        """Save model to directory."""
+        joblib.dump(self.model, os.path.join(dir_path, "model.joblib"))
 
-    def load(self, path: str) -> None:
+    def _load_weights(self, dir_path: str) -> None:
+        """Load model from directory."""
+        self.model = joblib.load(os.path.join(dir_path, "model.joblib"))
+
+    def _load_weights_legacy(self, path: str) -> None:
+        """Load model from legacy single-file path."""
         self.model = joblib.load(f"{path}.joblib")
 
     # Override: BaseModel auto-captures __init__ args, but since this class
