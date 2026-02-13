@@ -105,7 +105,7 @@ model.train(train_data=train_data, tracking=False, max_epochs=10)
 
 ### Adding New Models
 1. Create `src/ml_project_template/models/my_model.py` extending `BaseModel` (or `BasePytorchModel` for PyTorch)
-2. Implement `_fit()` (and `get_params()` only if automatic capture doesn't work — see below)
+2. Implement `_fit()`, `_save_weights()`, `_load_weights()`, `_load_weights_legacy()`, and `predict()` (and `get_params()` only if automatic capture doesn't work — see below)
 3. Register in `registry.py`
 4. Add lifecycle and get_params tests in `tests/test_models.py`
 
@@ -115,13 +115,18 @@ class BaseModel(ABC):
     # Public API — MLflow orchestration (set experiment, start run, log params, save artifact)
     def train(self, *, experiment_name, train_data, tracking=True, **kwargs) -> None
 
-    # Subclasses implement — model-specific training logic
-    def _fit(self, train_data, val_data=None, **kwargs) -> None
+    # Public API — saves config.json + calls _save_weights()
+    def save(self, path: str) -> str
+
+    # Public API — resolves path (directory vs legacy), calls _load_weights() or _load_weights_legacy()
+    def load(self, path: str) -> None
 
     # Abstract — subclasses must implement
+    def _fit(self, train_data, val_data=None, **kwargs) -> None
+    def _save_weights(self, dir_path: str) -> None
+    def _load_weights(self, dir_path: str) -> None
+    def _load_weights_legacy(self, path: str) -> None
     def predict(self, X: np.ndarray) -> np.ndarray
-    def save(self, path: str) -> str
-    def load(self, path: str) -> None
 
     # Log to MLflow (no-op when tracking=False) — use in _fit() instead of mlflow directly
     def log_param(self, key, value) -> None
@@ -135,7 +140,7 @@ class BaseModel(ABC):
 ### BasePytorchModel
 Extends `BaseModel` with Lightning Fabric and shared PyTorch boilerplate:
 - `predict()` — numpy→tensor→device→inference→cpu→numpy
-- `save()`/`load()` — Fabric-based state dict persistence
+- `_save_weights()`/`_load_weights()`/`_load_weights_legacy()` — Fabric-based state dict persistence
 - `self.fabric` — initialized from constructor args (accelerator, devices, precision, etc.)
 
 Subclasses only need to implement `_fit()` and set `self.model`.
@@ -269,7 +274,7 @@ When adding a new model, add matching tests in `tests/test_models.py` following 
 ## ToDo
 
 - [x] **Add tests.** Test suite in `tests/` covers model lifecycle, registry, and dataset operations.
-- [ ] **Save model metadata alongside artifacts.** Loading a model currently requires knowing the exact init args. Save the params dict next to the weights so `load()` can reconstruct the model without the caller needing to know the architecture.
+- [x] **Save model metadata alongside artifacts.** `model.save(path)` creates a directory with `config.json` (model name + params) and weights. `ModelRegistry.load(path)` reconstructs any model from just a directory path.
 - [x] **Decouple MLflow from the training path.** `train(tracking=False)` skips all MLflow calls. Models use `self.log_param()`/`self.log_metric()` helpers that respect the flag.
 - [x] **Add CI/CD.** GitHub Actions workflow runs tests on PRs to main, with branch protection requiring checks to pass.
 - [ ] **Move BasePytorchModel to its own file.** `base.py` imports torch and lightning unconditionally, so even sklearn-only usage pays for the full PyTorch import chain. Splitting BasePytorchModel out would fix this.

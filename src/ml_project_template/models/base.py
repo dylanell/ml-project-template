@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import functools
 import inspect
+import json
 import os
 import tempfile
 import numpy as np
@@ -156,9 +157,7 @@ class BaseModel(ABC):
         fs = get_s3_filesystem()
         local_path = os.path.join(tmp_dir, os.path.basename(s3_path))
         saved_path = self.save(local_path)
-        # Upload with the correct extension (e.g. .pt, .joblib)
-        ext = os.path.splitext(saved_path)[1]
-        fs.put(saved_path, f"{s3_path}{ext}")
+        fs.put(saved_path, s3_path, recursive=True)
         return saved_path
 
     @abstractmethod
@@ -171,14 +170,42 @@ class BaseModel(ABC):
         """Run inference on input features."""
         raise NotImplementedError
 
-    @abstractmethod
     def save(self, path: str) -> str:
-        """Save model to disk. Returns the actual path saved."""
+        """Save model to a directory with config.json and weights. Returns the directory path."""
+        from ml_project_template.models.registry import ModelRegistry
+
+        os.makedirs(path, exist_ok=True)
+
+        config = {
+            "model_name": ModelRegistry.get_name(type(self)),
+            "model_params": self.get_params(),
+        }
+        with open(os.path.join(path, "config.json"), "w") as f:
+            json.dump(config, f, indent=2, default=str)
+
+        self._save_weights(path)
+        return path
+
+    @abstractmethod
+    def _save_weights(self, dir_path: str) -> None:
+        """Save model weights to directory. Subclasses implement this."""
+        raise NotImplementedError
+
+    def load(self, path: str) -> None:
+        """Load model from disk. Supports both directory-based and legacy single-file paths."""
+        if os.path.isdir(path):
+            self._load_weights(path)
+        else:
+            self._load_weights_legacy(path)
+
+    @abstractmethod
+    def _load_weights(self, dir_path: str) -> None:
+        """Load model weights from directory. Subclasses implement this."""
         raise NotImplementedError
 
     @abstractmethod
-    def load(self, path: str) -> None:
-        """Load model from disk."""
+    def _load_weights_legacy(self, path: str) -> None:
+        """Load model weights from legacy single-file path. Subclasses implement this."""
         raise NotImplementedError
 
 
@@ -219,14 +246,16 @@ class BasePytorchModel(BaseModel, ABC):
             output = self.model(X_tensor)
         return output.cpu().numpy()
 
-    def save(self, path: str) -> str:
-        """Save model state dict to disk. Returns the actual path saved."""
-        path = f"{path}.pt"
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self.fabric.save(path, {"model": self.model})
-        return path
+    def _save_weights(self, dir_path: str) -> None:
+        """Save model state dict to directory."""
+        self.fabric.save(os.path.join(dir_path, "model.pt"), {"model": self.model})
 
-    def load(self, path: str) -> None:
-        """Load model state dict from disk."""
+    def _load_weights(self, dir_path: str) -> None:
+        """Load model state dict from directory."""
+        state = {"model": self.model}
+        self.fabric.load(os.path.join(dir_path, "model.pt"), state)
+
+    def _load_weights_legacy(self, path: str) -> None:
+        """Load model state dict from legacy single-file path."""
         state = {"model": self.model}
         self.fabric.load(f"{path}.pt", state)

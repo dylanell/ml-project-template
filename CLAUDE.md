@@ -141,7 +141,7 @@ model.train(
 
 ### Adding New Models
 1. Create `src/ml_project_template/models/my_model.py` extending `BaseModel` (or `BasePytorchModel` for PyTorch)
-2. Implement `_fit()` (and `get_params()` only if automatic capture doesn't work — see below)
+2. Implement `_fit()`, `_save_weights()`, `_load_weights()`, `_load_weights_legacy()`, and `predict()` (and `get_params()` only if automatic capture doesn't work — see below)
 3. Register in `registry.py`
 
 ### BaseModel Interface
@@ -150,13 +150,18 @@ class BaseModel(ABC):
     # Public API — MLflow orchestration (set experiment, start run, log params, save artifact)
     def train(self, *, experiment_name, train_data, **kwargs) -> None
 
-    # Subclasses implement — model-specific training logic
-    def _fit(self, train_data, val_data=None, **kwargs) -> None
+    # Public API — saves config.json + calls _save_weights()
+    def save(self, path: str) -> str
+
+    # Public API — resolves path (directory vs legacy), calls _load_weights() or _load_weights_legacy()
+    def load(self, path: str) -> None
 
     # Abstract — subclasses must implement
+    def _fit(self, train_data, val_data=None, **kwargs) -> None
+    def _save_weights(self, dir_path: str) -> None
+    def _load_weights(self, dir_path: str) -> None
+    def _load_weights_legacy(self, path: str) -> None
     def predict(self, X: np.ndarray) -> np.ndarray
-    def save(self, path: str) -> str
-    def load(self, path: str) -> None
 
     # Auto-populated from __init__ args via __init_subclass__ — no override needed
     # Override only if automatic capture is insufficient (e.g. sklearn **kwargs)
@@ -166,7 +171,7 @@ class BaseModel(ABC):
 ### BasePytorchModel
 Extends `BaseModel` with Lightning Fabric and shared PyTorch boilerplate:
 - `predict()` — numpy→tensor→device→inference→cpu→numpy
-- `save()`/`load()` — Fabric-based state dict persistence
+- `_save_weights()`/`_load_weights()`/`_load_weights_legacy()` — Fabric-based state dict persistence
 - `self.fabric` — initialized from constructor args (accelerator, devices, precision, etc.)
 
 Subclasses only need to implement `_fit()` and set `self.model`.

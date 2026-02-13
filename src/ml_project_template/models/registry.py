@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import os
+
 from ml_project_template.models.base import BaseModel
 from ml_project_template.models.gb_classifier import GBClassifier
 from ml_project_template.models.mlp_classifier import MLPClassifier
@@ -26,6 +29,24 @@ class ModelRegistry:
         if name not in cls._models:
             raise ValueError(f"Unknown model: {name}. Available: {cls.list()}")
         return cls._models[name]
+
+    @classmethod
+    def get_name(cls, model_class: type[BaseModel]) -> str:
+        """Reverse lookup: model class → registry name."""
+        for name, klass in cls._models.items():
+            if klass is model_class:
+                return name
+        raise ValueError(f"Model class {model_class} is not registered.")
+
+    @classmethod
+    def load(cls, path: str) -> BaseModel:
+        """Load a model from a directory containing config.json and weights."""
+        with open(os.path.join(path, "config.json")) as f:
+            config = json.load(f)
+        model_class = cls.get(config["model_name"])
+        model = model_class(**config["model_params"])
+        model.load(path)
+        return model
 
     @classmethod
     def register(cls, name: str, model_class: type[BaseModel]) -> None:
