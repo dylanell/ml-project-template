@@ -72,7 +72,7 @@ tests/                       # Test suite (no external services needed)
 from ml_project_template.data import Dataset  # Alias for TabularDataset
 from ml_project_template.utils import get_storage_options
 
-dataset = Dataset.from_csv("s3://data/iris/iris.csv", target_column="species", storage_options=get_storage_options())
+dataset = Dataset.from_csv("s3://data/iris/iris.csv", target_column="species", storage_options=get_storage_options("s3://data/iris/iris.csv"))
 train_data, test_data = dataset.split(test_size=0.2, random_state=42)
 ```
 

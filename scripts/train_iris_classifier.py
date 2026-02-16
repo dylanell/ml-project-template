@@ -44,7 +44,7 @@ def main():
     data_path = preprocess_cfg.get("output_path", data_cfg["path"])
     print(f"\n[train] Loading data from {data_path}")
 
-    storage_options = get_storage_options()
+    storage_options = get_storage_options(data_path)
     dataset = Dataset.from_csv(data_path, target_column=data_cfg["target_column"], storage_options=storage_options)
     train_data, val_data = dataset.split(
         test_size=data_cfg.get("test_size", 0.2),

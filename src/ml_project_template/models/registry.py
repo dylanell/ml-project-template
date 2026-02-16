@@ -32,7 +32,7 @@ class ModelRegistry:
 
     @classmethod
     def get_name(cls, model_class: type[BaseModel]) -> str:
-        """Reverse lookup: model class → registry name."""
+        """Reverse lookup: Get name by model class."""
         for name, klass in cls._models.items():
             if klass is model_class:
                 return name
