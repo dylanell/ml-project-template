@@ -86,6 +86,7 @@ class MLPClassifier(BasePytorchModel):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
         model, optimizer = self.fabric.setup(self.model, optimizer)
 
+        # Initialize dataloaders
         train_dataloader = train_data.to_pytorch(batch_size=batch_size, shuffle=True)
         train_dataloader = self.fabric.setup_dataloaders(train_dataloader)
         if val_data is not None:

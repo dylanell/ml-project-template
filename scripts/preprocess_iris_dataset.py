@@ -42,8 +42,8 @@ def main():
     preprocess_cfg = config["preprocessing"]
 
     # Load raw data
-    storage_options = get_storage_options()
     raw_path = data_cfg["path"]
+    storage_options = get_storage_options(raw_path)
     target_column = data_cfg["target_column"]
     print(f"\n[preprocess] Loading raw data from {raw_path}")
     df = pd.read_csv(raw_path, storage_options=storage_options)
@@ -83,7 +83,7 @@ def main():
     output_path = preprocess_cfg["output_path"]
     if not output_path.startswith("s3://"):
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    df.to_csv(output_path, index=False, storage_options=storage_options)
+    df.to_csv(output_path, index=False, storage_options=get_storage_options(output_path))
     print(f"\n[preprocess] Wrote processed data to {output_path}")
     print(f"[preprocess] Done.")
 

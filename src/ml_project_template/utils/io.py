@@ -3,18 +3,17 @@
 import os
 
 
-def get_storage_options() -> dict:
+def get_storage_options(path: str = "") -> dict:
     """Return S3 storage options for pandas.
 
     Returns a dict suitable for passing to pandas read_csv/to_csv as
-    storage_options. Returns empty dict if S3_ENDPOINT_URL is not set,
-    so local paths work transparently.
+    storage_options. Only returns credentials when path is an S3 path,
+    so local paths work transparently even when S3 env vars are set.
     """
-    endpoint = os.environ.get("S3_ENDPOINT_URL")
-    if not endpoint:
+    if not path.startswith("s3://"):
         return {}
     return {
-        "endpoint_url": endpoint,
+        "endpoint_url": os.environ["S3_ENDPOINT_URL"],
         "key": os.environ["AWS_ACCESS_KEY_ID"],
         "secret": os.environ["AWS_SECRET_ACCESS_KEY"],
     }
