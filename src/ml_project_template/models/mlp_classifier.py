@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Union, Any, Optional
+from typing import Union, Any, Optional, List, Literal
 
 import torch
 import torch.nn as nn
@@ -13,25 +13,8 @@ from lightning.fabric.loggers import Logger
 from lightning.fabric.strategies import Strategy
 
 from ml_project_template.data import Dataset
-from ml_project_template.models.base import BasePytorchModel
-
-
-class MLP(nn.Module):
-    def __init__(
-        self,
-        input_dim: int,
-        hidden_dim: int,
-        num_classes: int
-    ):
-        super().__init__()
-        self.model = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, num_classes)
-        )
-
-    def forward(self, x):
-        return self.model(x)
+from ml_project_template.models.pytorch_base import BasePytorchModel
+from ml_project_template.modules.fully_connected import FullyConnected
 
 
 class MLPClassifier(BasePytorchModel):
@@ -39,9 +22,11 @@ class MLPClassifier(BasePytorchModel):
 
     def __init__(
         self,
-        input_dim: int,
-        hidden_dim: int,
-        num_classes: int,
+        layer_dims: List[int],
+        hidden_activation: str = "ReLU",
+        output_activation: str = "Identity",
+        use_bias: bool = True,
+        norm: Literal["batch", "layer"] | None = None,
         accelerator: Union[str, Accelerator] = "auto",
         strategy: Union[str, Strategy] = "auto",
         devices: Union[list[int], str, int] = "auto",
@@ -60,10 +45,12 @@ class MLPClassifier(BasePytorchModel):
             loggers=loggers
         )
 
-        self.model = MLP(
-            input_dim=input_dim,
-            hidden_dim=hidden_dim,
-            num_classes=num_classes
+        self.model = FullyConnected(
+            layer_dims=layer_dims,
+            hidden_activation=hidden_activation,
+            output_activation=output_activation,
+            use_bias=use_bias,
+            norm=norm,
         )
 
         self.loss_fcn = nn.CrossEntropyLoss()

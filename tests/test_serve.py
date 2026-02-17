@@ -1,4 +1,13 @@
-"""Tests for the serving endpoint."""
+"""Tests for the serving endpoint.
+
+Tests use FastAPI's TestClient (via httpx) to make real HTTP requests against
+the app without needing a running server. feature_names and class_names are
+passed directly to create_app() to skip CSV/S3 loading in tests.
+
+Helpers:
+- _make_config: Build a minimal config dict matching the training config format.
+- _train_and_save_mlp/_gb: Train a small model, save to a temp dir, return config.
+"""
 
 import tempfile
 
@@ -11,6 +20,7 @@ from ml_project_template.serving.iris_classifier import create_app
 
 
 def _make_config(model_name, model_params, model_path):
+    """Build a minimal config dict in the same format as training JSON configs."""
     return {
         "data": {"path": "unused", "target_column": "species"},
         "model": {"name": model_name, "params": model_params},
@@ -19,13 +29,15 @@ def _make_config(model_name, model_params, model_path):
 
 
 def _train_and_save_mlp(iris_tiny, tmp_dir):
-    model = MLPClassifier(input_dim=4, hidden_dim=8, num_classes=3)
+    """Train a small MLP, save to tmp_dir, return a config pointing to it."""
+    model = MLPClassifier(layer_dims=[4, 8, 3])
     model.train(train_data=iris_tiny, tracking=False, max_epochs=5)
     model.save(f"{tmp_dir}/model")
-    return _make_config("mlp_classifier", {"input_dim": 4, "hidden_dim": 8, "num_classes": 3}, f"{tmp_dir}/model")
+    return _make_config("mlp_classifier", {"layer_dims": [4, 8, 3]}, f"{tmp_dir}/model")
 
 
 def _train_and_save_gb(iris_tiny, tmp_dir):
+    """Train a small GB classifier, save to tmp_dir, return a config pointing to it."""
     model = GBClassifier(n_estimators=10, max_depth=2)
     model.train(train_data=iris_tiny, tracking=False)
     model.save(f"{tmp_dir}/model")
@@ -45,6 +57,7 @@ class TestHealth:
 
 class TestInfo:
     def test_info(self, iris_tiny):
+        """Should return model name, params, feature names, and class names."""
         with tempfile.TemporaryDirectory() as tmp:
             config = _train_and_save_mlp(iris_tiny, tmp)
             app = create_app(config, feature_names=["f0", "f1", "f2", "f3"], class_names=["a", "b", "c"])
@@ -55,11 +68,12 @@ class TestInfo:
             assert data["model_name"] == "mlp_classifier"
             assert data["feature_names"] == ["f0", "f1", "f2", "f3"]
             assert data["class_names"] == ["a", "b", "c"]
-            assert data["model_params"]["input_dim"] == 4
+            assert data["model_params"]["layer_dims"] == [4, 8, 3]
 
 
 class TestPredict:
     def test_predict_mlp(self, iris_tiny):
+        """MLP should return (n, num_classes) predictions."""
         with tempfile.TemporaryDirectory() as tmp:
             config = _train_and_save_mlp(iris_tiny, tmp)
             app = create_app(config, feature_names=["f0", "f1", "f2", "f3"], class_names=["a", "b", "c"])
@@ -68,9 +82,10 @@ class TestPredict:
             assert resp.status_code == 200
             preds = resp.json()["predictions"]
             assert len(preds) == 2
-            assert len(preds[0]) == 3  # num_classes=3, MLP returns (n, 3)
+            assert len(preds[0]) == 3  # 3 classes — MLP returns raw logits
 
     def test_predict_gb(self, iris_tiny):
+        """GB should return (n, 1) predictions (class labels reshaped to 2D)."""
         with tempfile.TemporaryDirectory() as tmp:
             config = _train_and_save_gb(iris_tiny, tmp)
             app = create_app(config, feature_names=["f0", "f1", "f2", "f3"], class_names=["a", "b", "c"])
@@ -79,13 +94,15 @@ class TestPredict:
             assert resp.status_code == 200
             preds = resp.json()["predictions"]
             assert len(preds) == 1
-            assert len(preds[0]) == 1  # GB returns (n,) reshaped to (n, 1)
+            assert len(preds[0]) == 1  # GB returns scalar labels, normalized to (n, 1)
 
     def test_predict_invalid_features(self, iris_tiny):
+        """Should return 422 when feature count doesn't match the model."""
         with tempfile.TemporaryDirectory() as tmp:
             config = _train_and_save_mlp(iris_tiny, tmp)
             app = create_app(config, feature_names=["f0", "f1", "f2", "f3"], class_names=["a", "b", "c"])
             client = TestClient(app)
+            # Send 2 features when model expects 4
             resp = client.post("/predict", json={"features": [[1.0, 2.0]]})
             assert resp.status_code == 422
             assert "expected 4" in resp.json()["detail"]

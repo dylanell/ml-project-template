@@ -82,14 +82,16 @@ src/ml_project_template/
 │   ├── base.py              # BaseDataset ABC
 │   └── tabular.py           # TabularDataset for numerical data
 ├── models/                  # Model implementations
-│   ├── base.py              # BaseModel ABC + BasePytorchModel (MLflow, Fabric, save/load/predict)
+│   ├── base.py              # BaseModel ABC (MLflow, save/load)
+│   ├── pytorch_base.py      # BasePytorchModel ABC (Fabric, predict, weights)
 │   ├── registry.py          # ModelRegistry for model discovery
 │   ├── gb_classifier.py     # Sklearn GradientBoosting wrapper
 │   └── mlp_classifier.py    # PyTorch MLP (MLP nn.Module + MLPClassifier)
 ├── serving/
 │   └── iris_classifier.py    # FastAPI app factory for iris classification
 ├── utils/
-│   └── io.py                # S3-compatible I/O utilities (get_storage_options, get_s3_filesystem)
+│   ├── io.py                # S3-compatible I/O utilities (get_storage_options, get_s3_filesystem)
+│   └── seed.py              # seed_everything() for reproducibility
 
 configs/                     # Training configs (JSON)
 docker/                                  # Dockerfiles per pipeline stage
@@ -140,7 +142,7 @@ model.train(
 ```
 
 ### Adding New Models
-1. Create `src/ml_project_template/models/my_model.py` extending `BaseModel` (or `BasePytorchModel` for PyTorch)
+1. Create `src/ml_project_template/models/my_model.py` extending `BaseModel` (from `base.py`) or `BasePytorchModel` (from `pytorch_base.py`) for PyTorch
 2. Implement `_fit()`, `_save_weights()`, `_load_weights()`, `_load_weights_legacy()`, and `predict()` (and `get_params()` only if automatic capture doesn't work — see below)
 3. Register in `registry.py`
 
@@ -183,6 +185,8 @@ into `self._model_params`. Works across the inheritance chain (e.g. Fabric args 
 automatically in `train()`. Override `get_params()` only when needed (e.g. sklearn
 models where `**kwargs` doesn't capture individual params with defaults).
 
+See README.md "Automatic `__init__` param capture" for a full walkthrough with examples.
+
 ## Conventions
 
 - **Notebooks run from project root** - VS Code setting `jupyter.notebookFileRoot` is set
@@ -192,6 +196,7 @@ models where `**kwargs` doesn't capture individual params with defaults).
 - **Sklearn models**: Override `get_params()` to delegate to sklearn's introspection
 - **NumPy I/O**: All models return raw numpy output from `predict()` — caller handles post-processing (argmax, etc.)
 - **Training params**: Logged manually inside `_fit()`, not auto-captured (only `__init__` args are auto-captured)
+- **Reproducibility**: Configs have a top-level `"seed"` key. Scripts call `seed_everything(seed)` early, and pass `seed=seed` to `model.train()`. The seed is logged to MLflow automatically.
 
 ## Environment Variables
 
