@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 
 from ml_project_template.data import Dataset
 from ml_project_template.models import ModelRegistry
-from ml_project_template.utils import get_storage_options
+from ml_project_template.utils import get_storage_options, seed_everything
 
 load_dotenv()
 
@@ -38,6 +38,11 @@ def main():
             print(f"[train] Error: config missing required key '{key}'")
             sys.exit(1)
 
+    # Seed early for reproducible data splitting
+    seed = config.get("seed")
+    if seed is not None:
+        seed_everything(seed)
+
     # Load data — use preprocessed output if available, otherwise raw
     data_cfg = config["data"]
     preprocess_cfg = config.get("preprocessing", {})
@@ -48,7 +53,7 @@ def main():
     dataset = Dataset.from_csv(data_path, target_column=data_cfg["target_column"], storage_options=storage_options)
     train_data, val_data = dataset.split(
         test_size=data_cfg.get("test_size", 0.2),
-        random_state=data_cfg.get("random_state", 42),
+        random_state=seed,
     )
 
     # Create model
@@ -73,6 +78,7 @@ def main():
         run_name=run_name,
         model_path=model_path,
         extra_params=extra_params,
+        seed=seed,
         **train_cfg,
     )
 

@@ -45,7 +45,8 @@ src/ml_project_template/
 │   ├── base.py              # BaseDataset ABC
 │   └── tabular.py           # TabularDataset for numerical data
 ├── models/                  # Model implementations
-│   ├── base.py              # BaseModel ABC + BasePytorchModel (MLflow, Fabric, save/load/predict)
+│   ├── base.py              # BaseModel ABC (MLflow, save/load)
+│   ├── pytorch_base.py      # BasePytorchModel ABC (Fabric, predict, weights)
 │   ├── registry.py          # ModelRegistry for model discovery
 │   ├── gb_classifier.py     # Sklearn GradientBoosting wrapper
 │   └── mlp_classifier.py    # PyTorch MLP (MLP nn.Module + MLPClassifier)
@@ -103,13 +104,39 @@ model.train(
 model.train(train_data=train_data, tracking=False, max_epochs=10)
 ```
 
-### Adding New Models
-1. Create `src/ml_project_template/models/my_model.py` extending `BaseModel` (or `BasePytorchModel` for PyTorch)
-2. Implement `_fit()`, `_save_weights()`, `_load_weights()`, `_load_weights_legacy()`, and `predict()` (and `get_params()` only if automatic capture doesn't work — see below)
+### Reproducibility
+
+Set a top-level `"seed"` key in your config JSON to seed all random number generators (Python, NumPy, PyTorch) for reproducible runs:
+
+```json
+{
+    "seed": 42,
+    "data": { ... },
+    "model": { ... },
+    "training": { ... }
+}
+```
+
+Scripts call `seed_everything(seed)` before data loading, and pass `seed=seed` to `model.train()` which re-seeds before training. The seed is logged to MLflow automatically.
+
+```python
+from ml_project_template.utils import seed_everything
+seed_everything(42)  # Seeds random, numpy, and torch (if available)
+```
+
+### Model Authoring Guide
+
+#### Steps to add a new model
+
+1. Create `src/ml_project_template/models/my_model.py` extending `BaseModel` (from `base.py`) or `BasePytorchModel` (from `pytorch_base.py`) for PyTorch
+2. Implement `_fit()`, `_save_weights()`, `_load_weights()`, `_load_weights_legacy()`, and `predict()`
 3. Register in `registry.py`
 4. Add lifecycle and get_params tests in `tests/test_models.py`
 
-### BaseModel Interface
+You do **not** need to implement `get_params()` in most cases — see below.
+
+#### BaseModel Interface
+
 ```python
 class BaseModel(ABC):
     # Public API — MLflow orchestration (set experiment, start run, log params, save artifact)
@@ -137,7 +164,8 @@ class BaseModel(ABC):
     def get_params(self) -> dict
 ```
 
-### BasePytorchModel
+#### BasePytorchModel
+
 Extends `BaseModel` with Lightning Fabric and shared PyTorch boilerplate:
 - `predict()` — numpy→tensor→device→inference→cpu→numpy
 - `_save_weights()`/`_load_weights()`/`_load_weights_legacy()` — Fabric-based state dict persistence
@@ -145,8 +173,35 @@ Extends `BaseModel` with Lightning Fabric and shared PyTorch boilerplate:
 
 Subclasses only need to implement `_fit()` and set `self.model`.
 
-### Automatic `__init__` Param Capture
-`BaseModel` uses `__init_subclass__` to automatically record all `__init__` arguments into `self._model_params`. Works across the inheritance chain (e.g. Fabric args from `BasePytorchModel` + architecture args from `MLPClassifier`). Logged to MLflow automatically in `train()`. Override `get_params()` only when needed (e.g. sklearn models where `**kwargs` doesn't capture individual params with defaults).
+#### Automatic `__init__` param capture
+
+`BaseModel` uses `__init_subclass__` to automatically record all `__init__` arguments into `self._model_params`. This means `get_params()` works out of the box — you don't need to build param dicts manually or override it.
+
+**How it works:**
+
+1. `BaseModel.__init_subclass__` wraps every subclass `__init__` with a decorator.
+2. After the original `__init__` runs, the wrapper inspects the method signature with `inspect.signature()`, binds the actual call arguments (including defaults) via `sig.bind()` + `apply_defaults()`, and stores them in `self._model_params`.
+3. This works across the inheritance chain: when `super().__init__()` is called, the parent's wrapped `__init__` runs first and captures its own params. The child's wrapper then merges its params on top.
+4. `get_params()` returns the combined `_model_params` dict. `train()` logs it to MLflow automatically.
+
+See the implementation in `src/ml_project_template/models/base.py` lines 35–74.
+
+**Example — what happens when `MLPClassifier(layer_dims=[4, 8, 3])` is created:**
+
+1. `MLPClassifier.__init__` calls `super().__init__()` with default Fabric args
+2. `BasePytorchModel.__init__` (wrapped) runs → captures `accelerator="auto"`, `strategy="auto"`, `devices="auto"`, `precision="32-true"`, `plugins=None`, `callbacks=None`, `loggers=None` into `self._model_params`
+3. `MLPClassifier.__init__` (wrapped) finishes → merges in `layer_dims=[4, 8, 3]`, `hidden_activation="ReLU"`, `output_activation="Identity"`, `use_bias=True`, `norm=None`
+4. `model.get_params()` returns the combined dict of all 12 params
+
+**When to override `get_params()`:**
+
+Override when auto-capture is insufficient — specifically when your `__init__` uses `**kwargs` to forward arguments to an underlying library. Auto-capture will record the explicitly passed kwargs, but won't capture the library's internal defaults.
+
+Example: `GBClassifier.__init__(self, **kwargs)` forwards to sklearn's `GradientBoostingClassifier(**kwargs)`. If you create `GBClassifier(n_estimators=200)`, auto-capture only sees `{"n_estimators": 200}`. But sklearn has dozens of other params with defaults (`learning_rate=0.1`, `max_depth=3`, etc.) that are important for reproducibility. So `GBClassifier` overrides `get_params()` to delegate to `self.model.get_params()`, which returns the full set.
+
+**What NOT to worry about — training params:**
+
+Training-time arguments like `lr`, `batch_size`, `max_epochs` are passed to `_fit()`, not `__init__()`, so they are **not** auto-captured. These are logged manually inside `_fit()` using `self.log_param()`. This is by design: `__init__` params define the model architecture (what gets saved/loaded), while training params are run-specific.
 
 ## Quick Start
 
@@ -277,9 +332,9 @@ When adding a new model, add matching tests in `tests/test_models.py` following 
 - [x] **Save model metadata alongside artifacts.** `model.save(path)` creates a directory with `config.json` (model name + params) and weights. `ModelRegistry.load(path)` reconstructs any model from just a directory path.
 - [x] **Decouple MLflow from the training path.** `train(tracking=False)` skips all MLflow calls. Models use `self.log_param()`/`self.log_metric()` helpers that respect the flag.
 - [x] **Add CI/CD.** GitHub Actions workflow runs tests on PRs to main, with branch protection requiring checks to pass.
-- [ ] **Move BasePytorchModel to its own file.** `base.py` imports torch and lightning unconditionally, so even sklearn-only usage pays for the full PyTorch import chain. Splitting BasePytorchModel out would fix this.
-- [ ] **Document the `__init_subclass__` param capture for onboarding.** The auto-capture of `_model_params` is non-obvious to newcomers. Add an explanation to the contributing guide or model-authoring docs.
-- [ ] **Add central seed management for reproducibility.** No way to set random seeds (torch, numpy, python) from a central place. "Can't reproduce your result" will be a recurring team issue without this.
+- [x] **Move BasePytorchModel to its own file.** `base.py` imports torch and lightning unconditionally, so even sklearn-only usage pays for the full PyTorch import chain. Splitting BasePytorchModel out would fix this.
+- [x] **Document the `__init_subclass__` param capture for onboarding.** The auto-capture of `_model_params` is non-obvious to newcomers. Add an explanation to the contributing guide or model-authoring docs.
+- [x] **Add central seed management for reproducibility.** `seed_everything()` utility seeds Python, NumPy, and PyTorch. Configs have a top-level `"seed"` key; scripts seed early and pass to `model.train(seed=...)`.
 - [ ] **Consider decorator-based model registration.** Currently adding a model requires editing two files (model file + registry.py), which causes merge conflicts when multiple people add models simultaneously.
 - [x] **Add API serving.** FastAPI server for model inference. Load a saved model from config, expose `/health`, `/info`, and `/predict` endpoints, containerized for deployment.
 - [ ] **Support regression tasks in Dataset.** `y` is always cast to `long()` and `LabelEncoder` is built in, so the data layer is classification-only. Regression would need a new dataset class or modifications.

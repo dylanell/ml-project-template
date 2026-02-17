@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 
-from ml_project_template.utils import get_storage_options
+from ml_project_template.utils import get_storage_options, seed_everything
 
 load_dotenv()
 
@@ -37,6 +37,11 @@ def main():
         if key not in config:
             print(f"[preprocess] Error: config missing required key '{key}'")
             sys.exit(1)
+
+    # Seed for reproducible preprocessing
+    seed = config.get("seed")
+    if seed is not None:
+        seed_everything(seed)
 
     data_cfg = config["data"]
     preprocess_cfg = config["preprocessing"]

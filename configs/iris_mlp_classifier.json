@@ -1,9 +1,9 @@
 {
+    "seed": 42,
     "data": {
         "path": "s3://data/iris/iris.csv",
         "target_column": "species",
-        "test_size": 0.2,
-        "random_state": 42
+        "test_size": 0.2
     },
     "preprocessing": {
         "scaling": "standardize",

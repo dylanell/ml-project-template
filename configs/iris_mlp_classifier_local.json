@@ -1,4 +1,5 @@
 {
+    "seed": 42,
     "data": {
         "path": ".data/iris/iris.csv",
         "target_column": "species",

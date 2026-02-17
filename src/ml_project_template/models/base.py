@@ -9,17 +9,8 @@ import json
 import os
 import tempfile
 import numpy as np
-from typing import Union, Any, Optional
-
-from pathlib import Path
 
 import mlflow
-import torch
-
-import lightning as L
-from lightning.fabric.accelerators import Accelerator
-from lightning.fabric.loggers import Logger
-from lightning.fabric.strategies import Strategy
 
 from ml_project_template.data import Dataset
 
@@ -106,6 +97,7 @@ class BaseModel(ABC):
         model_path: str | None = None,
         extra_params: dict | None = None,
         tracking: bool = True,
+        seed: int | None = None,
         **train_kwargs,
     ) -> None:
         """Full training pipeline with optional MLflow tracking.
@@ -118,9 +110,15 @@ class BaseModel(ABC):
             model_path: Optional path to save model artifact
             extra_params: Optional extra params to log (e.g. data/preprocessing config)
             tracking: Whether to enable MLflow tracking (default True)
+            seed: Optional random seed for reproducibility (seeds all libraries before training)
             **train_kwargs: Model-specific training arguments passed to _fit()
         """
         self._tracking = tracking
+
+        # Seed all random number generators before training
+        if seed is not None:
+            from ml_project_template.utils import seed_everything
+            seed_everything(seed)
 
         if not tracking:
             self._fit(train_data, val_data=val_data, **train_kwargs)
@@ -130,6 +128,10 @@ class BaseModel(ABC):
 
         mlflow.set_experiment(experiment_name)
         with mlflow.start_run(run_name=run_name):
+            # Log seed
+            if seed is not None:
+                mlflow.log_param("seed", seed)
+
             # Log model params
             mlflow.log_params(self.get_params())
 
@@ -207,55 +209,3 @@ class BaseModel(ABC):
     def _load_weights_legacy(self, path: str) -> None:
         """Load model weights from legacy single-file path. Subclasses implement this."""
         raise NotImplementedError
-
-
-class BasePytorchModel(BaseModel, ABC):
-    """Abstract base class for Pytorch models.
-
-    Ref: https://github.com/Lightning-AI/pytorch-lightning/blob/master/examples/fabric/build_your_own_trainer/trainer.py
-    """
-
-    def __init__(
-        self,
-        accelerator: Union[str, Accelerator] = "auto",
-        strategy: Union[str, Strategy] = "auto",
-        devices: Union[list[int], str, int] = "auto",
-        precision: Union[str, int] = "32-true",
-        plugins: Optional[Union[str, Any]] = None,
-        callbacks: Optional[Union[list[Any], Any]] = None,
-        loggers: Optional[Union[Logger, list[Logger]]] = None
-    ):
-        self.model: torch.nn.Module  # Subclasses must set this
-
-        # Initialize fabric
-        self.fabric = L.Fabric(
-            accelerator=accelerator,
-            strategy=strategy,
-            devices=devices,
-            precision=precision,
-            plugins=plugins,
-            callbacks=callbacks,
-            loggers=loggers
-        )
-
-    def predict(self, X: np.ndarray) -> np.ndarray:
-        """Run inference. Returns raw model output as numpy array."""
-        self.model.eval()
-        X_tensor = torch.from_numpy(X).float().to(self.fabric.device)
-        with torch.no_grad():
-            output = self.model(X_tensor)
-        return output.cpu().numpy()
-
-    def _save_weights(self, dir_path: str) -> None:
-        """Save model state dict to directory."""
-        self.fabric.save(os.path.join(dir_path, "model.pt"), {"model": self.model})
-
-    def _load_weights(self, dir_path: str) -> None:
-        """Load model state dict from directory."""
-        state = {"model": self.model}
-        self.fabric.load(os.path.join(dir_path, "model.pt"), state)
-
-    def _load_weights_legacy(self, path: str) -> None:
-        """Load model state dict from legacy single-file path."""
-        state = {"model": self.model}
-        self.fabric.load(f"{path}.pt", state)
