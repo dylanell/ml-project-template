@@ -12,7 +12,7 @@ import numpy as np
 
 import mlflow
 
-from ml_project_template.data import Dataset
+from ml_project_template.data import BaseDataset
 
 
 class BaseModel(ABC):
@@ -91,8 +91,8 @@ class BaseModel(ABC):
         self,
         *,
         experiment_name: str = "",
-        train_data: Dataset,
-        val_data: Dataset | None = None,
+        train_data: BaseDataset,
+        val_data: BaseDataset | None = None,
         run_name: str | None = None,
         model_path: str | None = None,
         extra_params: dict | None = None,

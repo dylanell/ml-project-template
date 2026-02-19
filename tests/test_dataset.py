@@ -12,7 +12,7 @@ import tempfile
 
 import torch
 
-from ml_project_template.data import Dataset
+from ml_project_template.data import TabularDataset
 
 
 def test_split(iris_tiny):
@@ -54,6 +54,6 @@ def test_from_csv_local_with_s3_env_set(iris_tiny, monkeypatch):
         df.to_csv(csv_path, index=False)
 
         # This should succeed despite S3 env vars being set
-        dataset = Dataset.from_csv(csv_path, target_column="target")
+        dataset = TabularDataset.from_csv(csv_path, target_column="target")
         assert len(dataset) == 20
         assert dataset.feature_names == iris_tiny.feature_names

@@ -12,7 +12,7 @@ from lightning.fabric.accelerators import Accelerator
 from lightning.fabric.loggers import Logger
 from lightning.fabric.strategies import Strategy
 
-from ml_project_template.data import Dataset
+from ml_project_template.data import TabularDataset
 from ml_project_template.models.pytorch_base import BasePytorchModel
 from ml_project_template.modules.fully_connected import FullyConnected
 
@@ -57,8 +57,8 @@ class MLPClassifier(BasePytorchModel):
 
     def _fit(
         self,
-        train_data: Dataset,
-        val_data: Optional[Dataset] = None,
+        train_data: TabularDataset,
+        val_data: Optional[TabularDataset] = None,
         *,
         lr: float = 1e-3,
         batch_size: int = 32,

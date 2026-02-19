@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from ml_project_template.data import Dataset
+from ml_project_template.data import TabularDataset
 
 
 @pytest.fixture
@@ -12,7 +12,7 @@ def iris_tiny():
     rng = np.random.default_rng(42)
     X = rng.standard_normal((20, 4)).astype(np.float32)
     y = np.array([0, 1, 2] * 6 + [0, 1], dtype=np.int64)
-    return Dataset(
+    return TabularDataset(
         X=X,
         y=y,
         feature_names=["f0", "f1", "f2", "f3"],

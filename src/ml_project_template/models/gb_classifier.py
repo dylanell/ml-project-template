@@ -8,7 +8,7 @@ import joblib
 import numpy as np
 from sklearn.ensemble import GradientBoostingClassifier as _GradientBoostingClassifier
 
-from ml_project_template.data import Dataset
+from ml_project_template.data import TabularDataset
 from ml_project_template.models.base import BaseModel
 
 
@@ -20,8 +20,8 @@ class GBClassifier(BaseModel):
 
     def _fit(
         self,
-        train_data: Dataset,
-        val_data: Optional[Dataset] = None,
+        train_data: TabularDataset,
+        val_data: Optional[TabularDataset] = None,
         **kwargs
     ) -> None:
         self.model.fit(train_data.X, train_data.y)
