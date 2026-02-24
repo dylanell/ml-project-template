@@ -46,9 +46,7 @@ class ModelRegistry:
         with open(os.path.join(path, "config.json")) as f:
             config = json.load(f)
         model_class = cls.get(config["model_name"])
-        model = model_class(**config["model_params"])
-        model.load(path)
-        return model
+        return model_class.load(path)
 
     @classmethod
     def register(cls, name: str, model_class: type[BaseModel]) -> None:

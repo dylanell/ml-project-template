@@ -26,6 +26,7 @@
         "model_path": ".models/iris_mlp_classifier",
         "tracking": false,
         "lr": 1e-3,
+        "weight_decay": 0.01,
         "max_epochs": 1000,
         "batch_size": 8,
         "val_frequency": 1,

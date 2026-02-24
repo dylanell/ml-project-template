@@ -53,13 +53,7 @@ class TestCnnSequenceClassifier:
             assert config["model_params"]["seq_length"] == 4
             assert config["model_params"]["output_dim"] == 2
 
-            model2 = CNNSequenceClassifier(
-                embed_dims=[len(sst2_tiny.vocab), 8],
-                kernel_spec=[[2, 4, 1]],
-                seq_length=4,
-                output_dim=2,
-            )
-            model2.load(f"{tmp}/model")
+            model2 = CNNSequenceClassifier.load(f"{tmp}/model")
 
             preds2 = model2.predict(sst2_tiny.sequences)
             np.testing.assert_array_equal(preds, preds2)
@@ -117,14 +111,7 @@ class TestMLPClassifier:
             assert config["model_params"]["hidden_activation"] == "ReLU"
             assert config["model_params"]["output_activation"] == "Identity"
 
-            # Load weights into a fresh instance and verify predictions match
-            model2 = MLPClassifier(
-                layer_dims=[4, 8, 3],
-                hidden_activation="ReLU",
-                output_activation="Identity",
-                use_bias=True
-            )
-            model2.load(f"{tmp}/model")
+            model2 = MLPClassifier.load(f"{tmp}/model")
 
             preds2 = model2.predict(iris_tiny.X)
             np.testing.assert_array_equal(preds, preds2)
@@ -177,9 +164,7 @@ class TestGBClassifier:
             assert config["model_params"]["n_estimators"] == 10
             assert config["model_params"]["max_depth"] == 2
 
-            # Load weights into a fresh instance and verify predictions match
-            model2 = GBClassifier(n_estimators=10, max_depth=2)
-            model2.load(f"{tmp}/model")
+            model2 = GBClassifier.load(f"{tmp}/model")
 
             preds2 = model2.predict(iris_tiny.X)
             np.testing.assert_array_equal(preds, preds2)

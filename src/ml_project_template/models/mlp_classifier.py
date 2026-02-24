@@ -61,16 +61,21 @@ class MLPClassifier(BasePytorchModel):
         val_data: Optional[TabularDataset] = None,
         *,
         lr: float = 1e-3,
+        weight_decay: float = 0.0,
         batch_size: int = 32,
         max_epochs: int = 100,
         val_frequency: int = 1,
-        patience: int = -1
+        patience: int = -1,
+        save_model: Optional[str] = None,
+        model_path: Optional[str] = None,
     ) -> None:
         if patience > 0 and val_data is None:
             raise ValueError("Patience requires a validation dataset.")
+        if save_model == "best" and val_data is None:
+            raise ValueError("save_model='best' requires a validation dataset.")
 
         # Initialize optimizer and fabric
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=lr, weight_decay=weight_decay)
         model, optimizer = self.fabric.setup(self.model, optimizer)
 
         # Initialize dataloaders
@@ -116,6 +121,8 @@ class MLPClassifier(BasePytorchModel):
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
                     epochs_without_improvement = 0
+                    if save_model == "best":
+                        self.save(model_path)
                 else:
                     epochs_without_improvement += 1
 
@@ -127,10 +134,16 @@ class MLPClassifier(BasePytorchModel):
                 f"val_loss: {val_loss:.4f} | best_val_loss: {best_val_loss:.4f}"
             pbar.set_description(status)
 
+        if save_model == "final":
+            self.save(model_path)
+
         # Log training parameters
         self.log_param("lr", lr)
+        self.log_param("weight_decay", weight_decay)
         self.log_param("batch_size", batch_size)
         self.log_param("max_epochs", max_epochs)
         self.log_param("val_frequency", val_frequency)
         self.log_param("patience", patience)
+        self.log_param("save_model", save_model)
+        self.log_param("model_path", model_path)
 

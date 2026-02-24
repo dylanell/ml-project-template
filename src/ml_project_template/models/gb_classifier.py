@@ -37,10 +37,6 @@ class GBClassifier(BaseModel):
         """Load model from directory."""
         self.model = joblib.load(os.path.join(dir_path, "model.joblib"))
 
-    def _load_weights_legacy(self, path: str) -> None:
-        """Load model from legacy single-file path."""
-        self.model = joblib.load(f"{path}.joblib")
-
     # Override: BaseModel auto-captures __init__ args, but since this class
     # takes **kwargs, it would record {"kwargs": {...}} (a nested dict).
     # Sklearn's get_params() gives us a flat dict of all params with defaults.
