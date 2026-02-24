@@ -8,7 +8,7 @@ import joblib
 import numpy as np
 from sklearn.ensemble import GradientBoostingClassifier as _GradientBoostingClassifier
 
-from ml_project_template.data import Dataset
+from ml_project_template.data import TabularDataset
 from ml_project_template.models.base import BaseModel
 
 
@@ -20,8 +20,8 @@ class GBClassifier(BaseModel):
 
     def _fit(
         self,
-        train_data: Dataset,
-        val_data: Optional[Dataset] = None,
+        train_data: TabularDataset,
+        val_data: Optional[TabularDataset] = None,
         **kwargs
     ) -> None:
         self.model.fit(train_data.X, train_data.y)
@@ -36,10 +36,6 @@ class GBClassifier(BaseModel):
     def _load_weights(self, dir_path: str) -> None:
         """Load model from directory."""
         self.model = joblib.load(os.path.join(dir_path, "model.joblib"))
-
-    def _load_weights_legacy(self, path: str) -> None:
-        """Load model from legacy single-file path."""
-        self.model = joblib.load(f"{path}.joblib")
 
     # Override: BaseModel auto-captures __init__ args, but since this class
     # takes **kwargs, it would record {"kwargs": {...}} (a nested dict).

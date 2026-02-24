@@ -2,8 +2,6 @@
 
 from ml_project_template.data.base import BaseDataset
 from ml_project_template.data.tabular import TabularDataset
+from ml_project_template.data.sequence import SequenceDataset
 
-# Backwards compatibility alias
-Dataset = TabularDataset
-
-__all__ = ["BaseDataset", "TabularDataset", "Dataset"]
+__all__ = ["BaseDataset", "TabularDataset", "SequenceDataset"]

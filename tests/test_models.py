@@ -17,6 +17,62 @@ import numpy as np
 
 from ml_project_template.models.mlp_classifier import MLPClassifier
 from ml_project_template.models.gb_classifier import GBClassifier
+from ml_project_template.models.cnn_sequence_classifier import CNNSequenceClassifier
+
+
+class TestCnnSequenceClassifier:
+    def test_lifecycle(self, sst2_tiny):
+        # seq_length=4 covers all sequences in the fixture (max length is 4)
+        model = CNNSequenceClassifier(
+            embed_dims=[len(sst2_tiny.vocab), 8],
+            kernel_spec=[[2, 4, 1]],
+            seq_length=4,
+            output_dim=2,
+        )
+
+        model.train(
+            train_data=sst2_tiny,
+            tracking=False,
+            max_epochs=2,
+        )
+
+        # Returns raw logits — shape is (num_samples, num_classes)
+        preds = model.predict(sst2_tiny.sequences)
+        assert preds.shape == (20, 2)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            saved_path = model.save(f"{tmp}/model")
+
+            assert os.path.isdir(saved_path)
+            assert os.path.exists(f"{tmp}/model/config.json")
+            assert os.path.exists(f"{tmp}/model/model.pt")
+
+            with open(f"{tmp}/model/config.json") as f:
+                config = json.load(f)
+            assert config["model_name"] == "cnn_sequence_classifier"
+            assert config["model_params"]["seq_length"] == 4
+            assert config["model_params"]["output_dim"] == 2
+
+            model2 = CNNSequenceClassifier.load(f"{tmp}/model")
+
+            preds2 = model2.predict(sst2_tiny.sequences)
+            np.testing.assert_array_equal(preds, preds2)
+
+    def test_get_params(self):
+        """Verify auto-captured __init__ params include both CNN and Fabric args."""
+        model = CNNSequenceClassifier(
+            embed_dims=[100, 16],
+            kernel_spec=[[3, 8, 1]],
+            seq_length=32,
+            output_dim=2,
+        )
+        params = model.get_params()
+        assert params["embed_dims"] == [100, 16]
+        assert params["kernel_spec"] == [[3, 8, 1]]
+        assert params["seq_length"] == 32
+        assert params["output_dim"] == 2
+        # Inherited Fabric default
+        assert params["accelerator"] == "auto"
 
 
 class TestMLPClassifier:
@@ -55,14 +111,7 @@ class TestMLPClassifier:
             assert config["model_params"]["hidden_activation"] == "ReLU"
             assert config["model_params"]["output_activation"] == "Identity"
 
-            # Load weights into a fresh instance and verify predictions match
-            model2 = MLPClassifier(
-                layer_dims=[4, 8, 3],
-                hidden_activation="ReLU",
-                output_activation="Identity",
-                use_bias=True
-            )
-            model2.load(f"{tmp}/model")
+            model2 = MLPClassifier.load(f"{tmp}/model")
 
             preds2 = model2.predict(iris_tiny.X)
             np.testing.assert_array_equal(preds, preds2)
@@ -115,9 +164,7 @@ class TestGBClassifier:
             assert config["model_params"]["n_estimators"] == 10
             assert config["model_params"]["max_depth"] == 2
 
-            # Load weights into a fresh instance and verify predictions match
-            model2 = GBClassifier(n_estimators=10, max_depth=2)
-            model2.load(f"{tmp}/model")
+            model2 = GBClassifier.load(f"{tmp}/model")
 
             preds2 = model2.predict(iris_tiny.X)
             np.testing.assert_array_equal(preds, preds2)

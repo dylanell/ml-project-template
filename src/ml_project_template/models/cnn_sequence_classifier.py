@@ -1,4 +1,5 @@
-"""PyTorch MLP classifier."""
+"""PyTorch CNN sequence classifier."""
+
 
 from __future__ import annotations
 
@@ -12,17 +13,20 @@ from lightning.fabric.accelerators import Accelerator
 from lightning.fabric.loggers import Logger
 from lightning.fabric.strategies import Strategy
 
-from ml_project_template.data import TabularDataset
+from ml_project_template.data import SequenceDataset
 from ml_project_template.models.pytorch_base import BasePytorchModel
-from ml_project_template.modules.fully_connected import FullyConnected
+from ml_project_template.modules.sequence_cnn import SequenceCNN
 
-
-class MLPClassifier(BasePytorchModel):
-    """Simple 2-layer MLP classifier."""
+class CNNSequenceClassifier(BasePytorchModel):
+    """Sequence classifier model using 1D CNNs."""
 
     def __init__(
         self,
-        layer_dims: List[int],
+        embed_dims: List[int],
+        kernel_spec: List[List[int]],
+        seq_length: int,
+        output_dim: int,
+        padding_idx: int = 0,
         hidden_activation: str = "ReLU",
         output_activation: str = "Identity",
         use_bias: bool = True,
@@ -45,20 +49,44 @@ class MLPClassifier(BasePytorchModel):
             loggers=loggers
         )
 
-        self.model = FullyConnected(
-            layer_dims=layer_dims,
+        self.seq_length = seq_length
+
+        self.model = SequenceCNN(
+            embed_dims=embed_dims,
+            kernel_spec=kernel_spec,
+            seq_length=seq_length,
+            output_dim=output_dim,
+            padding_idx=padding_idx,
             hidden_activation=hidden_activation,
             output_activation=output_activation,
             use_bias=use_bias,
-            norm=norm,
+            norm=norm
         )
 
         self.loss_fcn = nn.CrossEntropyLoss()
 
+    def predict(self, sequences: list[list[int]]) -> np.ndarray:
+        """Run inference on a list of encoded sequences.
+
+        Sequences are truncated/padded to self.seq_length before inference,
+        matching the fixed-length batches used during training.
+        """
+        import numpy as np
+        pad = 0
+        X = np.zeros((len(sequences), self.seq_length), dtype=np.int64)
+        for i, seq in enumerate(sequences):
+            trunc = seq[:self.seq_length]
+            X[i, :len(trunc)] = trunc
+        self.model.eval()
+        X_tensor = torch.from_numpy(X).long().to(self.fabric.device)
+        with torch.no_grad():
+            output = self.model(X_tensor)
+        return output.cpu().numpy()
+
     def _fit(
         self,
-        train_data: TabularDataset,
-        val_data: Optional[TabularDataset] = None,
+        train_data: SequenceDataset,
+        val_data: Optional[SequenceDataset] = None,
         *,
         lr: float = 1e-3,
         weight_decay: float = 0.0,
@@ -67,8 +95,8 @@ class MLPClassifier(BasePytorchModel):
         val_frequency: int = 1,
         patience: int = -1,
         save_model: Optional[str] = None,
-        model_path: Optional[str] = None,
-    ) -> None:
+        model_path: Optional[str] = None
+    ):
         if patience > 0 and val_data is None:
             raise ValueError("Patience requires a validation dataset.")
         if save_model == "best" and val_data is None:
@@ -79,10 +107,10 @@ class MLPClassifier(BasePytorchModel):
         model, optimizer = self.fabric.setup(self.model, optimizer)
 
         # Initialize dataloaders
-        train_dataloader = train_data.to_pytorch(batch_size=batch_size, shuffle=True)
+        train_dataloader = train_data.to_pytorch(batch_size=batch_size, shuffle=True, seq_length=self.seq_length)
         train_dataloader = self.fabric.setup_dataloaders(train_dataloader)
         if val_data is not None:
-            val_dataloader = val_data.to_pytorch(batch_size=batch_size, shuffle=False)
+            val_dataloader = val_data.to_pytorch(batch_size=batch_size, shuffle=False, seq_length=self.seq_length)
             val_dataloader = self.fabric.setup_dataloaders(val_dataloader)
 
         epochs_without_improvement = 0
@@ -141,9 +169,9 @@ class MLPClassifier(BasePytorchModel):
         self.log_param("lr", lr)
         self.log_param("weight_decay", weight_decay)
         self.log_param("batch_size", batch_size)
+        self.log_param("seq_length", self.seq_length)
         self.log_param("max_epochs", max_epochs)
         self.log_param("val_frequency", val_frequency)
         self.log_param("patience", patience)
         self.log_param("save_model", save_model)
         self.log_param("model_path", model_path)
-

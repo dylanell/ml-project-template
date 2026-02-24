@@ -80,7 +80,8 @@ argo submit -n argo argo/iris-classifier-pipeline.yaml -p config=configs/iris_gb
 src/ml_project_template/
 ├── data/                    # Dataset abstractions
 │   ├── base.py              # BaseDataset ABC
-│   └── tabular.py           # TabularDataset for numerical data
+│   ├── tabular.py           # TabularDataset for numerical data
+│   └── sequence.py          # SequenceDataset for text/token sequences
 ├── models/                  # Model implementations
 │   ├── base.py              # BaseModel ABC (MLflow, save/load)
 │   ├── pytorch_base.py      # BasePytorchModel ABC (Fabric, predict, weights)
@@ -109,10 +110,10 @@ notebooks/                   # R&D notebooks
 
 ### Data Loading
 ```python
-from ml_project_template.data import Dataset  # Alias for TabularDataset
+from ml_project_template.data import TabularDataset
 from ml_project_template.utils import get_storage_options
 
-dataset = Dataset.from_csv("s3://data/iris/iris.csv", target_column="species", storage_options=get_storage_options("s3://data/iris/iris.csv"))
+dataset = TabularDataset.from_csv("s3://data/iris/iris.csv", target_column="species", storage_options=get_storage_options("s3://data/iris/iris.csv"))
 train_data, test_data = dataset.split(test_size=0.2, random_state=42)
 ```
 

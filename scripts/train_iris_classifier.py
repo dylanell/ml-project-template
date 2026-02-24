@@ -14,7 +14,7 @@ import sys
 
 from dotenv import load_dotenv
 
-from ml_project_template.data import Dataset
+from ml_project_template.data import TabularDataset
 from ml_project_template.models import ModelRegistry
 from ml_project_template.utils import get_storage_options, seed_everything
 
@@ -50,7 +50,7 @@ def main():
     print(f"\n[train] Loading data from {data_path}")
 
     storage_options = get_storage_options(data_path)
-    dataset = Dataset.from_csv(data_path, target_column=data_cfg["target_column"], storage_options=storage_options)
+    dataset = TabularDataset.from_csv(data_path, target_column=data_cfg["target_column"], storage_options=storage_options)
     train_data, val_data = dataset.split(
         test_size=data_cfg.get("test_size", 0.2),
         random_state=seed,

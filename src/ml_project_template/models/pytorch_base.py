@@ -62,7 +62,3 @@ class BasePytorchModel(BaseModel, ABC):
         state = {"model": self.model}
         self.fabric.load(os.path.join(dir_path, "model.pt"), state)
 
-    def _load_weights_legacy(self, path: str) -> None:
-        """Load model state dict from legacy single-file path."""
-        state = {"model": self.model}
-        self.fabric.load(f"{path}.pt", state)

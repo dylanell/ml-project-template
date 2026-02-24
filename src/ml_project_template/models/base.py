@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+import contextlib
 import functools
 import inspect
 import json
 import os
 import tempfile
+from typing import Literal
 import numpy as np
 
 import mlflow
 
-from ml_project_template.data import Dataset
+from ml_project_template.data import BaseDataset
 
 
 class BaseModel(ABC):
@@ -91,13 +93,14 @@ class BaseModel(ABC):
         self,
         *,
         experiment_name: str = "",
-        train_data: Dataset,
-        val_data: Dataset | None = None,
+        train_data: BaseDataset,
+        val_data: BaseDataset | None = None,
         run_name: str | None = None,
         model_path: str | None = None,
         extra_params: dict | None = None,
         tracking: bool = True,
         seed: int | None = None,
+        save_model: Literal["best", "final"] | None = None,
         **train_kwargs,
     ) -> None:
         """Full training pipeline with optional MLflow tracking.
@@ -111,47 +114,101 @@ class BaseModel(ABC):
             extra_params: Optional extra params to log (e.g. data/preprocessing config)
             tracking: Whether to enable MLflow tracking (default True)
             seed: Optional random seed for reproducibility (seeds all libraries before training)
+            save_model: When to save during training. "best" saves on each new best val loss;
+                "final" saves once after training completes. Requires model_path to be set.
+                When set, _fit() owns saving and train() skips its own post-training save.
             **train_kwargs: Model-specific training arguments passed to _fit()
         """
         self._tracking = tracking
 
-        # Seed all random number generators before training
+        if save_model is not None and model_path is None:
+            raise ValueError("save_model requires model_path to be set.")
+
+        # Seed Python, NumPy, and PyTorch random number generators before training
+        # so that weight initialisation, data shuffling, and dropout are all reproducible.
         if seed is not None:
             from ml_project_template.utils import seed_everything
             seed_everything(seed)
 
-        if not tracking:
-            self._fit(train_data, val_data=val_data, **train_kwargs)
-            if model_path:
-                self.save(model_path)
-            return
+        # Resolve the local path that _fit() will use for checkpointing.
+        #
+        # _fit() only ever writes to a local filesystem path — it has no knowledge of S3.
+        # When the final destination is a local path, we pass it through unchanged.
+        # When the final destination is an S3 path, we create a temporary local directory
+        # for _fit() to checkpoint into, then do a single upload to S3 after training
+        # completes. This avoids paying the cost of an S3 write on every checkpoint
+        # (which could be dozens of times for save_model="best").
+        #
+        # ExitStack lets us conditionally enter the TemporaryDirectory context only for
+        # the S3 case, while keeping a single unified code path below.
+        with contextlib.ExitStack() as stack:
+            if save_model is not None and model_path.startswith("s3://"):
+                tmp_dir = stack.enter_context(tempfile.TemporaryDirectory())
+                checkpoint_path = os.path.join(tmp_dir, os.path.basename(model_path))
+            else:
+                # Local destination: _fit() writes directly to the final path.
+                checkpoint_path = model_path
 
-        mlflow.set_experiment(experiment_name)
-        with mlflow.start_run(run_name=run_name):
-            # Log seed
-            if seed is not None:
-                mlflow.log_param("seed", seed)
+            # Forward save_model and the resolved checkpoint_path to _fit() so the
+            # training loop knows when and where to write checkpoints.
+            fit_kwargs = dict(train_kwargs)
+            if save_model is not None:
+                fit_kwargs["save_model"] = save_model
+                fit_kwargs["model_path"] = checkpoint_path
 
-            # Log model params
-            mlflow.log_params(self.get_params())
+            if not tracking:
+                # Run training without MLflow. After _fit() completes, handle saving:
+                # - save_model=None: _fit() didn't save; save the final model now.
+                # - save_model set + S3 destination: _fit() saved to temp dir; upload to S3.
+                # - save_model set + local destination: _fit() already saved to model_path.
+                self._fit(train_data, val_data=val_data, **fit_kwargs)
+                if model_path and save_model is None:
+                    self.save(model_path)
+                elif save_model is not None and checkpoint_path != model_path:
+                    from ml_project_template.utils import get_s3_filesystem
+                    get_s3_filesystem().put(checkpoint_path, model_path, recursive=True)
+                return
 
-            # Log extra params (data config, preprocessing config, etc.)
-            if extra_params:
-                mlflow.log_params(extra_params)
+            mlflow.set_experiment(experiment_name)
+            with mlflow.start_run(run_name=run_name):
+                # Log seed so it's recorded alongside the run for reproducibility.
+                if seed is not None:
+                    mlflow.log_param("seed", seed)
 
-            # Model-specific training
-            # Training params manually logged
-            self._fit(train_data, val_data=val_data, **train_kwargs)
+                # Log architecture params (auto-captured from __init__ by BaseModel).
+                mlflow.log_params(self.get_params())
 
-            # Save model artifact
-            if model_path:
-                if model_path.startswith("s3://"):
-                    with tempfile.TemporaryDirectory() as tmp_dir:
-                        saved_path = self._save_to_s3(model_path, tmp_dir)
+                # Log any caller-supplied params (e.g. data config, preprocessing settings).
+                if extra_params:
+                    mlflow.log_params(extra_params)
+
+                # Run model-specific training. Training hyperparams (lr, batch_size, etc.)
+                # are logged manually inside _fit() via self.log_param().
+                self._fit(train_data, val_data=val_data, **fit_kwargs)
+
+                # Save the model artifact and log it to MLflow. Three cases:
+                #
+                # 1. save_model is set: _fit() already wrote the checkpoint to checkpoint_path.
+                #    If the final destination is S3, upload it now (one upload after training).
+                #    Then log the local checkpoint dir to MLflow.
+                #
+                # 2. save_model is None + S3 destination: save to a temp dir and upload.
+                #    (_save_to_s3 handles the save → upload → return local path dance.)
+                #
+                # 3. save_model is None + local destination: save directly and log.
+                if model_path:
+                    if save_model is not None:
+                        if checkpoint_path != model_path:
+                            from ml_project_template.utils import get_s3_filesystem
+                            get_s3_filesystem().put(checkpoint_path, model_path, recursive=True)
+                        mlflow.log_artifact(checkpoint_path)
+                    elif model_path.startswith("s3://"):
+                        with tempfile.TemporaryDirectory() as tmp_dir:
+                            saved_path = self._save_to_s3(model_path, tmp_dir)
+                            mlflow.log_artifact(saved_path)
+                    else:
+                        saved_path = self.save(model_path)
                         mlflow.log_artifact(saved_path)
-                else:
-                    saved_path = self.save(model_path)
-                    mlflow.log_artifact(saved_path)
 
     def _save_to_s3(self, s3_path: str, tmp_dir: str) -> str:
         """Save model to a temp dir, upload to S3, return local path for MLflow logging."""
@@ -193,19 +250,16 @@ class BaseModel(ABC):
         """Save model weights to directory. Subclasses implement this."""
         raise NotImplementedError
 
-    def load(self, path: str) -> None:
-        """Load model from disk. Supports both directory-based and legacy single-file paths."""
-        if os.path.isdir(path):
-            self._load_weights(path)
-        else:
-            self._load_weights_legacy(path)
+    @classmethod
+    def load(cls, path: str) -> BaseModel:
+        """Load a model from a saved directory. Returns a new instance with weights loaded."""
+        with open(os.path.join(path, "config.json")) as f:
+            config = json.load(f)
+        instance = cls(**config["model_params"])
+        instance._load_weights(path)
+        return instance
 
     @abstractmethod
     def _load_weights(self, dir_path: str) -> None:
         """Load model weights from directory. Subclasses implement this."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def _load_weights_legacy(self, path: str) -> None:
-        """Load model weights from legacy single-file path. Subclasses implement this."""
         raise NotImplementedError
