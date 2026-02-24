@@ -60,13 +60,21 @@ class SequenceCNN(nn.Module):
                 bias=use_bias
             ))
 
-            # The result of the conv above will be [B, out_channels, new_seq_length, 1].
-            # We swap dims 1 and 3 to make the output have a 1-dim channel dimension.
-            cnn_layers.append(Transpose(dim0=3, dim1=1))
-
             if i == len(kernel_spec) - 1:
+                # Output layer: Transpose → output activation, no norm
+                cnn_layers.append(Transpose(dim0=3, dim1=1))
                 cnn_layers.append(getattr(nn, output_activation)())
             else:
+                # Hidden layer: apply norm at the appropriate point, then activation
+                # Batch norm operates on [B, out_channels, seq_len, 1] — before Transpose
+                if norm == "batch":
+                    cnn_layers.append(nn.BatchNorm2d(out_channels))
+                # The result of the conv above will be [B, out_channels, new_seq_length, 1].
+                # We swap dims 1 and 3 to make the output have a 1-dim channel dimension.
+                cnn_layers.append(Transpose(dim0=3, dim1=1))
+                # Layer norm operates on [B, 1, seq_len, out_channels] — after Transpose
+                if norm == "layer":
+                    cnn_layers.append(nn.LayerNorm(out_channels))
                 cnn_layers.append(getattr(nn, hidden_activation)())
 
             # Calculate sequence length after this conv layer 
