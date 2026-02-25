@@ -41,30 +41,35 @@ Configure VSCode notebooks (add to .vscode/settings.json)
 
 ```
 src/ml_project_template/
-├── data/                    # Dataset abstractions
-│   ├── base.py              # BaseDataset ABC
-│   ├── tabular.py           # TabularDataset for numerical data
-│   └── sequence.py          # SequenceDataset for text/token sequences
-├── models/                  # Model implementations
-│   ├── base.py              # BaseModel ABC (MLflow, save/load)
-│   ├── pytorch_base.py      # BasePytorchModel ABC (Fabric, predict, weights)
-│   ├── registry.py          # ModelRegistry for model discovery
-│   ├── gb_classifier.py     # Sklearn GradientBoosting wrapper
-│   └── mlp_classifier.py    # PyTorch MLP (MLP nn.Module + MLPClassifier)
+├── data/                               # Dataset abstractions
+│   ├── base.py                         # BaseDataset ABC
+│   ├── tabular.py                      # TabularDataset for numerical data
+│   └── sequence.py                     # SequenceDataset for text/token sequences
+├── models/                             # Model implementations
+│   ├── base.py                         # BaseModel ABC (MLflow, save/load)
+│   ├── pytorch_base.py                 # BasePytorchModel ABC (Fabric, predict, weights)
+│   ├── registry.py                     # ModelRegistry for model discovery
+│   ├── gb_classifier.py                # Sklearn GradientBoosting wrapper
+│   ├── mlp_classifier.py               # PyTorch MLP classifier
+│   └── cnn_sequence_classifier.py      # PyTorch CNN sequence classifier
+├── modules/                            # Reusable nn.Module building blocks
+│   ├── fully_connected.py              # FullyConnected (MLP block with norm/activation)
+│   └── sequence_cnn.py                 # SequenceCNN (1D CNN via Conv2d + linear head)
 ├── serving/
-│   └── iris_classifier.py    # FastAPI app factory for iris classification
+│   └── iris_classifier.py              # FastAPI app factory for iris classification
 ├── utils/
-│   └── io.py                # S3-compatible I/O utilities (get_storage_options, get_s3_filesystem)
+│   ├── io.py                           # S3-compatible I/O utilities
+│   └── seed.py                         # seed_everything() for reproducibility
 
-configs/                     # Training configs (JSON)
-docker/                                  # Dockerfiles per pipeline stage
-├── preprocess-iris-dataset/Dockerfile   # Preprocessing image
-├── train-iris-classifier/Dockerfile     # Training image
-└── serve-iris-classifier/Dockerfile     # Serving image
-argo/                        # Argo Workflow pipelines
-scripts/                     # Data onboarding, preprocessing + training scripts
-notebooks/                   # R&D notebooks
-tests/                       # Test suite (no external services needed)
+configs/                                # Training configs (JSON)
+docker/                                 # Dockerfiles per pipeline stage
+├── preprocess-iris-dataset/Dockerfile  # Preprocessing image
+├── train-iris-classifier/Dockerfile    # Training image
+└── serve-iris-classifier/Dockerfile    # Serving image
+argo/                                   # Argo Workflow pipelines
+scripts/                                # Data onboarding, preprocessing + training scripts
+notebooks/                              # R&D notebooks
+tests/                                  # Test suite (no external services needed)
 ```
 
 ## Key Patterns
@@ -81,8 +86,11 @@ train_data, test_data = dataset.split(test_size=0.2, random_state=42)
 ### Model Registry
 ```python
 from ml_project_template.models import ModelRegistry
-ModelRegistry.list()  # ['gb_classifier', 'mlp_classifier']
-model = ModelRegistry.get("mlp_classifier")(input_dim=4, hidden_dim=16, num_classes=3)
+ModelRegistry.list()  # ['gb_classifier', 'mlp_classifier', 'cnn_sequence_classifier']
+model = ModelRegistry.get("mlp_classifier")(layer_dims=[4, 16, 3])
+
+# Load a saved model — returns a fully instantiated model (no need to know architecture params)
+model = ModelRegistry.get("mlp_classifier").load(".models/my_model")
 ```
 
 ### Training
@@ -93,10 +101,12 @@ model.train(
     experiment_name="my-experiment",
     train_data=train_data,
     val_data=val_data,
-    model_path=".models/my_model",
-    run_name="run-1",  # optional
+    model_path=".models/my_model",  # local or s3:// path
+    run_name="run-1",               # optional
+    save_model="best",              # optional: "best" or "final" (works with S3 paths too)
     # Model-specific training kwargs (e.g. for MLP):
     lr=1e-3,
+    weight_decay=1e-4,
     max_epochs=100,
     batch_size=32,
 )
@@ -130,7 +140,7 @@ seed_everything(42)  # Seeds random, numpy, and torch (if available)
 #### Steps to add a new model
 
 1. Create `src/ml_project_template/models/my_model.py` extending `BaseModel` (from `base.py`) or `BasePytorchModel` (from `pytorch_base.py`) for PyTorch
-2. Implement `_fit()`, `_save_weights()`, `_load_weights()`, `_load_weights_legacy()`, and `predict()`
+2. Implement `_fit()`, `_save_weights()`, `_load_weights()`, and `predict()`
 3. Register in `registry.py`
 4. Add lifecycle and get_params tests in `tests/test_models.py`
 
@@ -146,14 +156,14 @@ class BaseModel(ABC):
     # Public API — saves config.json + calls _save_weights()
     def save(self, path: str) -> str
 
-    # Public API — resolves path (directory vs legacy), calls _load_weights() or _load_weights_legacy()
-    def load(self, path: str) -> None
+    # Public classmethod — reads config.json, instantiates model, loads weights, returns instance
+    @classmethod
+    def load(cls, path: str) -> BaseModel
 
     # Abstract — subclasses must implement
     def _fit(self, train_data, val_data=None, **kwargs) -> None
     def _save_weights(self, dir_path: str) -> None
     def _load_weights(self, dir_path: str) -> None
-    def _load_weights_legacy(self, path: str) -> None
     def predict(self, X: np.ndarray) -> np.ndarray
 
     # Log to MLflow (no-op when tracking=False) — use in _fit() instead of mlflow directly
@@ -169,7 +179,7 @@ class BaseModel(ABC):
 
 Extends `BaseModel` with Lightning Fabric and shared PyTorch boilerplate:
 - `predict()` — numpy→tensor→device→inference→cpu→numpy
-- `_save_weights()`/`_load_weights()`/`_load_weights_legacy()` — Fabric-based state dict persistence
+- `_save_weights()`/`_load_weights()` — Fabric-based state dict persistence
 - `self.fabric` — initialized from constructor args (accelerator, devices, precision, etc.)
 
 Subclasses only need to implement `_fit()` and set `self.model`.
@@ -336,6 +346,8 @@ When adding a new model, add matching tests in `tests/test_models.py` following 
 - [x] **Move BasePytorchModel to its own file.** `base.py` imports torch and lightning unconditionally, so even sklearn-only usage pays for the full PyTorch import chain. Splitting BasePytorchModel out would fix this.
 - [x] **Document the `__init_subclass__` param capture for onboarding.** The auto-capture of `_model_params` is non-obvious to newcomers. Add an explanation to the contributing guide or model-authoring docs.
 - [x] **Add central seed management for reproducibility.** `seed_everything()` utility seeds Python, NumPy, and PyTorch. Configs have a top-level `"seed"` key; scripts seed early and pass to `model.train(seed=...)`.
+- [x] **HuggingFace-style model loading.** `ModelClass.load(path)` classmethod reads `config.json`, instantiates the model, loads weights, and returns the instance — no need for the caller to know the architecture params upfront.
+- [x] **Mid-training checkpointing.** `train(save_model="best"|"final", model_path=...)` saves on best val loss or at end of training. Works with both local and S3 paths (S3: checkpoints locally, uploads once after training).
 - [ ] **Consider decorator-based model registration.** Currently adding a model requires editing two files (model file + registry.py), which causes merge conflicts when multiple people add models simultaneously.
 - [x] **Add API serving.** FastAPI server for model inference. Load a saved model from config, expose `/health`, `/info`, and `/predict` endpoints, containerized for deployment.
 - [ ] **Support regression tasks in Dataset.** `y` is always cast to `long()` and `LabelEncoder` is built in, so the data layer is classification-only. Regression would need a new dataset class or modifications.
