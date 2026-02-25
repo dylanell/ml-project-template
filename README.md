@@ -324,17 +324,3 @@ Tests use `tracking=False` to skip MLflow, so no external services (MLflow, MinI
 When adding a new model, add matching tests in `tests/test_models.py` following the existing pattern:
 - **`test_lifecycle`** — create, train (with `tracking=False`), predict (check output shape), save to a temp dir, load into a fresh instance, predict again (outputs match)
 - **`test_get_params`** — verify `get_params()` returns the expected keys and values
-
-## ToDo
-
-- [x] **Add tests.** Test suite in `tests/` covers model lifecycle, registry, and dataset operations.
-- [x] **Save model metadata alongside artifacts.** `model.save(path)` creates a directory with `config.json` (model name + params) and weights. `ModelRegistry.load(path)` reconstructs any model from just a directory path.
-- [x] **Decouple MLflow from the training path.** `train(tracking=False)` skips all MLflow calls. Models use `self.log_param()`/`self.log_metric()` helpers that respect the flag.
-- [x] **Add CI/CD.** GitHub Actions workflow runs tests on PRs to main, with branch protection requiring checks to pass.
-- [x] **Document the `__init_subclass__` param capture for onboarding.** The auto-capture of `_model_params` is non-obvious to newcomers. Add an explanation to the contributing guide or model-authoring docs.
-- [x] **Add central seed management for reproducibility.** `seed_everything()` utility seeds Python, NumPy, and PyTorch. Configs have a top-level `"seed"` key; scripts seed early and pass to `model.train(seed=...)`.
-- [x] **HuggingFace-style model loading.** `ModelClass.load(path)` classmethod reads `config.json`, instantiates the model, loads weights, and returns the instance — no need for the caller to know the architecture params upfront.
-- [x] **Mid-training checkpointing.** `train(save_model="best"|"final", model_path=...)` saves on best val loss or at end of training. Works with both local and S3 paths (S3: checkpoints locally, uploads once after training).
-- [ ] **Consider decorator-based model registration.** Currently adding a model requires editing two files (model file + registry.py), which causes merge conflicts when multiple people add models simultaneously.
-- [x] **Add API serving.** FastAPI server for model inference. Load a saved model from config, expose `/health`, `/info`, and `/predict` endpoints, containerized for deployment.
-- [ ] **Support regression tasks in Dataset.** `y` is always cast to `long()` and `LabelEncoder` is built in, so the data layer is classification-only. Regression would need a new dataset class or modifications.
