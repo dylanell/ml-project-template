@@ -16,4 +16,4 @@ COPY scripts/ scripts/
 COPY configs/ configs/
 RUN uv sync --frozen
 
-ENTRYPOINT ["uv", "run", "python", "scripts/preprocess_iris_dataset.py"]
+ENTRYPOINT ["uv", "run", "python", "scripts/preprocess.py"]

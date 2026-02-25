@@ -21,4 +21,4 @@ ENV GIT_PYTHON_REFRESH=quiet
 
 EXPOSE 8000
 
-ENTRYPOINT ["uv", "run", "python", "scripts/serve_iris_classifier.py"]
+ENTRYPOINT ["uv", "run", "python", "scripts/serve.py"]

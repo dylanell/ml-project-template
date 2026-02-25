@@ -4,7 +4,7 @@ Scales feature columns and writes a processed CSV for downstream training.
 Supports "standardize" (zero mean, unit variance) and "min-max" (0-1 range).
 
 Usage:
-    uv run python scripts/preprocess_iris_dataset.py --config configs/iris_mlp_classifier.json
+    uv run python scripts/preprocess.py --config configs/iris_mlp_classifier.json
 """
 
 import argparse

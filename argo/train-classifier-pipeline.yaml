@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
-  generateName: iris-classifier-pipeline-
+  generateName: train-classifier-pipeline-
 spec:
   entrypoint: pipeline
   arguments:
@@ -11,9 +11,9 @@ spec:
   templates:
     - name: preprocess
       container:
-        image: preprocessing-job:latest
+        image: preprocess-job:latest
         imagePullPolicy: Never
-        command: ["uv", "run", "python", "scripts/preprocess_iris_dataset.py"]
+        command: ["uv", "run", "python", "scripts/preprocess.py"]
         args: ["--config", "{{workflow.parameters.config}}"]
         envFrom:
           - secretRef:
@@ -30,13 +30,13 @@ spec:
       volumes:
         - name: configs
           configMap:
-            name: training-configs
+            name: train-configs
 
     - name: train
       container:
-        image: training-job:latest
+        image: train-job:latest
         imagePullPolicy: Never
-        command: ["uv", "run", "python", "scripts/train_iris_classifier.py"]
+        command: ["uv", "run", "python", "scripts/train.py"]
         args: ["--config", "{{workflow.parameters.config}}"]
         envFrom:
           - secretRef:
@@ -57,7 +57,7 @@ spec:
       volumes:
         - name: configs
           configMap:
-            name: training-configs
+            name: train-configs
 
     - name: pipeline
       dag:

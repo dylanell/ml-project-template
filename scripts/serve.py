@@ -4,8 +4,8 @@ Loads a trained model from the path in the config and exposes it
 via a FastAPI server with /health, /info, and /predict endpoints.
 
 Usage:
-    uv run python scripts/serve_iris_classifier.py --config configs/iris_mlp_classifier.json
-    uv run python scripts/serve_iris_classifier.py --config configs/iris_gb_classifier.json
+    uv run python scripts/serve.py --config configs/iris_mlp_classifier.json
+    uv run python scripts/serve.py --config configs/iris_gb_classifier.json
 """
 
 import argparse
@@ -15,7 +15,7 @@ import sys
 import uvicorn
 from dotenv import load_dotenv
 
-from ml_project_template.serving.iris_classifier import create_app
+from ml_project_template.serving.app import create_app
 
 load_dotenv()
 
