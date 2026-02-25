@@ -13,9 +13,10 @@
         "name": "mlp_classifier",
         "params": {
             "layer_dims": [4, 16, 3],
-            "hidden_activation": "ReLU",
+            "hidden_activation": "LeakyReLU",
             "output_activation": "Identity",
-            "use_bias": true
+            "use_bias": true,
+            "norm": "layer"
         }
     },
     "training": {
@@ -27,6 +28,8 @@
         "max_epochs": 1000,
         "batch_size": 8,
         "val_frequency": 1,
-        "patience": 10
+        "patience": 10,
+        "save_model": "best",
+        "tracking": true
     }
 }

@@ -1,8 +1,8 @@
 """Download the Iris dataset to a local directory or S3 prefix.
 
 Usage:
-    uv run python scripts/onboard_iris_dataset.py
-    uv run python scripts/onboard_iris_dataset.py --dest s3://data/iris/
+    uv run python scripts/onboard.py
+    uv run python scripts/onboard.py --dest s3://data/iris/
 """
 
 import argparse

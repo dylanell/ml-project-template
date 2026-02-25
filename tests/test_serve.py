@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 
 from ml_project_template.models.mlp_classifier import MLPClassifier
 from ml_project_template.models.gb_classifier import GBClassifier
-from ml_project_template.serving.iris_classifier import create_app
+from ml_project_template.serving.app import create_app
 
 
 def _make_config(model_name, model_params, model_path):

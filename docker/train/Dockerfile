@@ -19,4 +19,4 @@ RUN uv sync --frozen
 # Silence git warnings
 ENV GIT_PYTHON_REFRESH=quiet
 
-ENTRYPOINT ["uv", "run", "python", "scripts/train_iris_classifier.py"]
+ENTRYPOINT ["uv", "run", "python", "scripts/train.py"]

@@ -8,7 +8,6 @@ import os
 from ml_project_template.models.base import BaseModel
 from ml_project_template.models.gb_classifier import GBClassifier
 from ml_project_template.models.mlp_classifier import MLPClassifier
-from ml_project_template.models.cnn_sequence_classifier import CNNSequenceClassifier
 
 
 class ModelRegistry:
@@ -16,8 +15,7 @@ class ModelRegistry:
 
     _models: dict[str, type[BaseModel]] = {
         "gb_classifier": GBClassifier,
-        "mlp_classifier": MLPClassifier,
-        "cnn_sequence_classifier": CNNSequenceClassifier
+        "mlp_classifier": MLPClassifier
     }
 
     @classmethod

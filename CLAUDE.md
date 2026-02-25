@@ -19,27 +19,27 @@ uv run pytest tests/ -v
 docker compose up -d
 
 # Onboard data (local or S3)
-uv run python scripts/onboard_iris_dataset.py
-uv run python scripts/onboard_iris_dataset.py --dest s3://data/iris/
+uv run python scripts/onboard.py
+uv run python scripts/onboard.py --dest s3://data/iris/
 
 # Run scripts/notebooks
 uv run jupyter notebook
 
 # Preprocess data
-uv run python scripts/preprocess_iris_dataset.py --config configs/iris_mlp_classifier.json
+uv run python scripts/preprocess.py --config configs/iris_mlp_classifier.json
 
 # Train a model from config
-uv run python scripts/train_iris_classifier.py --config configs/iris_mlp_classifier.json
-uv run python scripts/train_iris_classifier.py --config configs/iris_gb_classifier.json
+uv run python scripts/train.py --config configs/iris_mlp_classifier.json
+uv run python scripts/train.py --config configs/iris_gb_classifier.json
 
 # Serve a trained model
-uv run python scripts/serve_iris_classifier.py --config configs/iris_mlp_classifier.json
-uv run python scripts/serve_iris_classifier.py --config configs/iris_gb_classifier.json
+uv run python scripts/serve.py --config configs/iris_mlp_classifier.json
+uv run python scripts/serve.py --config configs/iris_gb_classifier.json
 
 # Docker
-docker build -t preprocessing-job -f docker/preprocess-iris-dataset/Dockerfile .
-docker build -t training-job -f docker/train-iris-classifier/Dockerfile .
-docker build -t serving-job -f docker/serve-iris-classifier/Dockerfile .
+docker build -t preprocessing-job -f docker/preprocess/Dockerfile .
+docker build -t training-job -f docker/train/Dockerfile .
+docker build -t serving-job -f docker/serve/Dockerfile .
 
 docker run --env-file .env \
   -e S3_ENDPOINT_URL=http://host.docker.internal:7000 \
@@ -70,8 +70,8 @@ source .env && kubectl create secret generic s3-credentials --namespace argo \
 kubectl create configmap training-configs --namespace argo --from-file=configs/
 
 # Argo Workflows — run pipeline (preprocess → train)
-argo submit -n argo argo/iris-classifier-pipeline.yaml --watch
-argo submit -n argo argo/iris-classifier-pipeline.yaml -p config=configs/iris_gb_classifier.json --watch
+argo submit -n argo argo/train-classifier-pipeline.yaml --watch
+argo submit -n argo argo/train-classifier-pipeline.yaml -p config=configs/iris_gb_classifier.json --watch
 ```
 
 ## Architecture
@@ -80,33 +80,29 @@ argo submit -n argo argo/iris-classifier-pipeline.yaml -p config=configs/iris_gb
 src/ml_project_template/
 ├── data/                    # Dataset abstractions
 │   ├── base.py              # BaseDataset ABC
-│   ├── tabular.py           # TabularDataset for numerical data
-│   └── sequence.py          # SequenceDataset for text/token sequences
+│   └── tabular.py           # TabularDataset for numerical data
 ├── models/                  # Model implementations
 │   ├── base.py              # BaseModel ABC (MLflow, save/load)
-│   ├── pytorch_base.py      # BasePytorchModel ABC (Fabric, predict, weights)
 │   ├── registry.py          # ModelRegistry for model discovery
 │   ├── gb_classifier.py     # Sklearn GradientBoosting wrapper
-│   ├── mlp_classifier.py    # PyTorch MLP classifier
-│   └── cnn_sequence_classifier.py  # PyTorch CNN sequence classifier
+│   └── mlp_classifier.py    # PyTorch MLP classifier
 ├── modules/                 # Reusable nn.Module building blocks
-│   ├── fully_connected.py   # FullyConnected (MLP block with norm/activation)
-│   └── sequence_cnn.py      # SequenceCNN (1D CNN via Conv2d + linear head)
+│   └── fully_connected.py   # FullyConnected (MLP block with norm/activation)
 ├── serving/
-│   └── iris_classifier.py   # FastAPI app factory for iris classification
+│   └── app.py               # FastAPI app factory (generic, config-driven)
 ├── utils/
 │   ├── io.py                # S3-compatible I/O utilities (get_storage_options, get_s3_filesystem)
 │   └── seed.py              # seed_everything() for reproducibility
 
 configs/                     # Training configs (JSON)
-docker/                                  # Dockerfiles per pipeline stage
-├── preprocess-iris-dataset/Dockerfile   # Preprocessing image
-├── train-iris-classifier/Dockerfile     # Training image
-└── serve-iris-classifier/Dockerfile     # Serving image
+docker/                      # Dockerfiles per pipeline stage
+├── preprocess/Dockerfile    # Preprocessing image
+├── train/Dockerfile         # Training image
+└── serve/Dockerfile         # Serving image
 argo/                        # Argo Workflow pipelines
 .data/                       # Raw datasets (gitignored)
 .models/                     # Saved model artifacts (gitignored)
-scripts/                     # Data onboarding, preprocessing + training scripts
+scripts/                     # Pipeline stage entry points
 notebooks/                   # R&D notebooks
 ```
 
@@ -124,12 +120,12 @@ train_data, test_data = dataset.split(test_size=0.2, random_state=42)
 ### Model Registry
 ```python
 from ml_project_template.models import ModelRegistry
-ModelRegistry.list()  # ['gb_classifier', 'mlp_classifier', 'cnn_sequence_classifier']
+ModelRegistry.list()  # ['gb_classifier', 'mlp_classifier']
 model = ModelRegistry.get("mlp_classifier")(layer_dims=[4, 16, 3])
 
-# Load a saved model — returns a fully instantiated model (no need to know architecture params)
-model = ModelRegistry.get("mlp_classifier").load(".models/my_model")
-# or equivalently:
+# Load a saved model — class is inferred from config.json (no need to know it upfront)
+model = ModelRegistry.load(".models/my_model")
+# Or explicitly, when you know the model type
 model = MLPClassifier.load(".models/my_model")
 ```
 
@@ -156,9 +152,11 @@ model.train(
 ```
 
 ### Adding New Models
-1. Create `src/ml_project_template/models/my_model.py` extending `BaseModel` (from `base.py`) or `BasePytorchModel` (from `pytorch_base.py`) for PyTorch
+1. Create `src/ml_project_template/models/my_model.py` extending `BaseModel` (from `base.py`)
 2. Implement `_fit()`, `_save_weights()`, `_load_weights()`, and `predict()` (and `get_params()` only if automatic capture doesn't work — see below)
 3. Register in `registry.py`
+
+For PyTorch models, initialize `lightning.Fabric` in `__init__` directly (see `mlp_classifier.py`).
 
 ### BaseModel Interface
 ```python
@@ -184,20 +182,11 @@ class BaseModel(ABC):
     def get_params(self) -> dict
 ```
 
-### BasePytorchModel
-Extends `BaseModel` with Lightning Fabric and shared PyTorch boilerplate:
-- `predict()` — numpy→tensor→device→inference→cpu→numpy
-- `_save_weights()`/`_load_weights()` — Fabric-based state dict persistence
-- `self.fabric` — initialized from constructor args (accelerator, devices, precision, etc.)
-
-Subclasses only need to implement `_fit()` and set `self.model`.
-
 ### Automatic `__init__` Param Capture
 `BaseModel` uses `__init_subclass__` to automatically record all `__init__` arguments
-into `self._model_params`. Works across the inheritance chain (e.g. Fabric args from
-`BasePytorchModel` + architecture args from `MLPClassifier`). Logged to MLflow
-automatically in `train()`. Override `get_params()` only when needed (e.g. sklearn
-models where `**kwargs` doesn't capture individual params with defaults).
+into `self._model_params`. Logged to MLflow automatically in `train()`. Override
+`get_params()` only when needed (e.g. sklearn models where `**kwargs` doesn't capture
+individual params with defaults).
 
 See README.md "Automatic `__init__` param capture" for a full walkthrough with examples.
 
@@ -206,7 +195,7 @@ See README.md "Automatic `__init__` param capture" for a full walkthrough with e
 - **Notebooks run from project root** - VS Code setting `jupyter.notebookFileRoot` is set
 - **Data in `.data/`** - Raw datasets, gitignored
 - **Models in `.models/`** - Saved artifacts, gitignored
-- **PyTorch models**: Separate `nn.Module` class from `BasePytorchModel` wrapper in same file
+- **PyTorch models**: Separate `nn.Module` class from `BaseModel` wrapper in same file; initialize `lightning.Fabric` directly in `__init__`
 - **Sklearn models**: Override `get_params()` to delegate to sklearn's introspection
 - **NumPy I/O**: All models return raw numpy output from `predict()` — caller handles post-processing (argmax, etc.)
 - **Training params**: Logged manually inside `_fit()`, not auto-captured (only `__init__` args are auto-captured)

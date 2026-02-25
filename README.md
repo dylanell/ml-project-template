@@ -41,35 +41,31 @@ Configure VSCode notebooks (add to .vscode/settings.json)
 
 ```
 src/ml_project_template/
-├── data/                               # Dataset abstractions
-│   ├── base.py                         # BaseDataset ABC
-│   ├── tabular.py                      # TabularDataset for numerical data
-│   └── sequence.py                     # SequenceDataset for text/token sequences
-├── models/                             # Model implementations
-│   ├── base.py                         # BaseModel ABC (MLflow, save/load)
-│   ├── pytorch_base.py                 # BasePytorchModel ABC (Fabric, predict, weights)
-│   ├── registry.py                     # ModelRegistry for model discovery
-│   ├── gb_classifier.py                # Sklearn GradientBoosting wrapper
-│   ├── mlp_classifier.py               # PyTorch MLP classifier
-│   └── cnn_sequence_classifier.py      # PyTorch CNN sequence classifier
-├── modules/                            # Reusable nn.Module building blocks
-│   ├── fully_connected.py              # FullyConnected (MLP block with norm/activation)
-│   └── sequence_cnn.py                 # SequenceCNN (1D CNN via Conv2d + linear head)
+├── data/                          # Dataset abstractions
+│   ├── base.py                    # BaseDataset ABC
+│   └── tabular.py                 # TabularDataset for numerical data
+├── models/                        # Model implementations
+│   ├── base.py                    # BaseModel ABC (MLflow, save/load)
+│   ├── registry.py                # ModelRegistry for model discovery
+│   ├── gb_classifier.py           # Sklearn GradientBoosting wrapper
+│   └── mlp_classifier.py          # PyTorch MLP classifier (Fabric)
+├── modules/                       # Reusable nn.Module building blocks
+│   └── fully_connected.py         # FullyConnected (MLP block with norm/activation)
 ├── serving/
-│   └── iris_classifier.py              # FastAPI app factory for iris classification
+│   └── app.py                     # FastAPI app factory
 ├── utils/
-│   ├── io.py                           # S3-compatible I/O utilities
-│   └── seed.py                         # seed_everything() for reproducibility
+│   ├── io.py                      # S3-compatible I/O utilities
+│   └── seed.py                    # seed_everything() for reproducibility
 
-configs/                                # Training configs (JSON)
-docker/                                 # Dockerfiles per pipeline stage
-├── preprocess-iris-dataset/Dockerfile  # Preprocessing image
-├── train-iris-classifier/Dockerfile    # Training image
-└── serve-iris-classifier/Dockerfile    # Serving image
-argo/                                   # Argo Workflow pipelines
-scripts/                                # Data onboarding, preprocessing + training scripts
-notebooks/                              # R&D notebooks
-tests/                                  # Test suite (no external services needed)
+configs/                           # Training configs (JSON)
+docker/                            # Dockerfiles per pipeline stage
+├── preprocess/Dockerfile          # Preprocessing image
+├── train/Dockerfile               # Training image
+└── serve/Dockerfile               # Serving image
+argo/                              # Argo Workflow pipelines
+scripts/                           # Data onboarding, preprocessing + training scripts
+notebooks/                         # R&D notebooks
+tests/                             # Test suite (no external services needed)
 ```
 
 ## Key Patterns
@@ -86,11 +82,13 @@ train_data, test_data = dataset.split(test_size=0.2, random_state=42)
 ### Model Registry
 ```python
 from ml_project_template.models import ModelRegistry
-ModelRegistry.list()  # ['gb_classifier', 'mlp_classifier', 'cnn_sequence_classifier']
+ModelRegistry.list()  # ['gb_classifier', 'mlp_classifier']
 model = ModelRegistry.get("mlp_classifier")(layer_dims=[4, 16, 3])
 
-# Load a saved model — returns a fully instantiated model (no need to know architecture params)
-model = ModelRegistry.get("mlp_classifier").load(".models/my_model")
+# Load a saved model — class is inferred from config.json (no need to know it upfront)
+model = ModelRegistry.load(".models/my_model")
+# Or explicitly, when you know the model type
+model = MLPClassifier.load(".models/my_model")
 ```
 
 ### Training
@@ -139,7 +137,7 @@ seed_everything(42)  # Seeds random, numpy, and torch (if available)
 
 #### Steps to add a new model
 
-1. Create `src/ml_project_template/models/my_model.py` extending `BaseModel` (from `base.py`) or `BasePytorchModel` (from `pytorch_base.py`) for PyTorch
+1. Create `src/ml_project_template/models/my_model.py` extending `BaseModel` (from `base.py`). For PyTorch models, initialize `lightning.Fabric` in `__init__` and use it for device/optimizer setup in `_fit()`
 2. Implement `_fit()`, `_save_weights()`, `_load_weights()`, and `predict()`
 3. Register in `registry.py`
 4. Add lifecycle and get_params tests in `tests/test_models.py`
@@ -175,15 +173,6 @@ class BaseModel(ABC):
     def get_params(self) -> dict
 ```
 
-#### BasePytorchModel
-
-Extends `BaseModel` with Lightning Fabric and shared PyTorch boilerplate:
-- `predict()` — numpy→tensor→device→inference→cpu→numpy
-- `_save_weights()`/`_load_weights()` — Fabric-based state dict persistence
-- `self.fabric` — initialized from constructor args (accelerator, devices, precision, etc.)
-
-Subclasses only need to implement `_fit()` and set `self.model`.
-
 #### Automatic `__init__` param capture
 
 `BaseModel` uses `__init_subclass__` to automatically record all `__init__` arguments into `self._model_params`. This means `get_params()` works out of the box — you don't need to build param dicts manually or override it.
@@ -199,10 +188,9 @@ See the implementation in `src/ml_project_template/models/base.py` lines 35–74
 
 **Example — what happens when `MLPClassifier(layer_dims=[4, 8, 3])` is created:**
 
-1. `MLPClassifier.__init__` calls `super().__init__()` with default Fabric args
-2. `BasePytorchModel.__init__` (wrapped) runs → captures `accelerator="auto"`, `strategy="auto"`, `devices="auto"`, `precision="32-true"`, `plugins=None`, `callbacks=None`, `loggers=None` into `self._model_params`
-3. `MLPClassifier.__init__` (wrapped) finishes → merges in `layer_dims=[4, 8, 3]`, `hidden_activation="ReLU"`, `output_activation="Identity"`, `use_bias=True`, `norm=None`
-4. `model.get_params()` returns the combined dict of all 12 params
+1. `MLPClassifier.__init__` runs and completes
+2. The wrapper captures all arguments — `layer_dims=[4, 8, 3]`, `hidden_activation="ReLU"`, `output_activation="Identity"`, `use_bias=True`, `norm=None`, plus all Fabric defaults (`accelerator="auto"`, etc.) — into `self._model_params`
+3. `model.get_params()` returns the full dict
 
 **When to override `get_params()`:**
 
@@ -230,7 +218,7 @@ docker compose up -d
 Create `data` and `models` buckets in the MinIO console, then onboard data:
 
 ```bash
-uv run python scripts/onboard_iris_dataset.py --dest s3://data/iris/
+uv run python scripts/onboard.py --dest s3://data/iris/
 ```
 
 Stop services with `docker compose down`. Data persists in Docker volumes across restarts.
@@ -239,8 +227,8 @@ Stop services with `docker compose down`. Data persists in Docker volumes across
 
 ```bash
 # Build images
-docker build -t preprocessing-job -f docker/preprocess-iris-dataset/Dockerfile .
-docker build -t training-job -f docker/train-iris-classifier/Dockerfile .
+docker build -t preprocess-job -f docker/preprocess/Dockerfile .
+docker build -t train-job -f docker/train/Dockerfile .
 
 # Run preprocessing (reads/writes data via S3)
 docker run --env-file .env \
@@ -248,7 +236,7 @@ docker run --env-file .env \
   -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
   -e MLFLOW_S3_ENDPOINT_URL=http://host.docker.internal:7000 \
   -v $(pwd)/configs:/app/configs \
-  preprocessing-job --config configs/iris_mlp_classifier.json
+  preprocess-job --config configs/iris_mlp_classifier.json
 
 # Run training (reads data via S3, saves model to S3, logs to MLflow)
 docker run --env-file .env \
@@ -256,7 +244,7 @@ docker run --env-file .env \
   -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
   -e MLFLOW_S3_ENDPOINT_URL=http://host.docker.internal:7000 \
   -v $(pwd)/configs:/app/configs \
-  training-job --config configs/iris_mlp_classifier.json
+  train-job --config configs/iris_mlp_classifier.json
 ```
 
 > `--env-file .env` loads S3 and MLflow credentials. The `-e` flags override the endpoint URLs to use `host.docker.internal`, which resolves to the host machine from inside Docker containers (Mac/Windows). On Linux, add `--add-host=host.docker.internal:host-gateway` to the `docker run` command.
@@ -267,16 +255,16 @@ Serve a trained model via FastAPI. The server reads the same JSON config used fo
 
 ```bash
 # Local (requires a trained model saved to the configured model_path)
-uv run python scripts/serve_iris_classifier.py --config configs/iris_mlp_classifier.json
+uv run python scripts/serve.py --config configs/iris_mlp_classifier.json
 
 # Docker
-docker build -t serving-job -f docker/serve-iris-classifier/Dockerfile .
+docker build -t serve-job -f docker/serve/Dockerfile .
 
 docker run --env-file .env \
   -e S3_ENDPOINT_URL=http://host.docker.internal:7000 \
   -p 8000:8000 \
   -v $(pwd)/configs:/app/configs \
-  serving-job --config configs/iris_mlp_classifier.json
+  serve-job --config configs/iris_mlp_classifier.json
 ```
 
 Test the endpoints:
@@ -307,10 +295,10 @@ source .env && kubectl create secret generic s3-credentials --namespace argo \
 kubectl create configmap training-configs --namespace argo --from-file=configs/
 
 # Submit a pipeline (uses MLP config by default)
-argo submit -n argo argo/iris-classifier-pipeline.yaml --watch
+argo submit -n argo argo/train-classifier-pipeline.yaml --watch
 
 # Or specify a different config
-argo submit -n argo argo/iris-classifier-pipeline.yaml -p config=configs/iris_gb_classifier.json --watch
+argo submit -n argo argo/train-classifier-pipeline.yaml -p config=configs/iris_gb_classifier.json --watch
 
 # Argo UI (optional)
 kubectl port-forward -n argo svc/argo-server 2746:2746
@@ -336,18 +324,3 @@ Tests use `tracking=False` to skip MLflow, so no external services (MLflow, MinI
 When adding a new model, add matching tests in `tests/test_models.py` following the existing pattern:
 - **`test_lifecycle`** — create, train (with `tracking=False`), predict (check output shape), save to a temp dir, load into a fresh instance, predict again (outputs match)
 - **`test_get_params`** — verify `get_params()` returns the expected keys and values
-
-## ToDo
-
-- [x] **Add tests.** Test suite in `tests/` covers model lifecycle, registry, and dataset operations.
-- [x] **Save model metadata alongside artifacts.** `model.save(path)` creates a directory with `config.json` (model name + params) and weights. `ModelRegistry.load(path)` reconstructs any model from just a directory path.
-- [x] **Decouple MLflow from the training path.** `train(tracking=False)` skips all MLflow calls. Models use `self.log_param()`/`self.log_metric()` helpers that respect the flag.
-- [x] **Add CI/CD.** GitHub Actions workflow runs tests on PRs to main, with branch protection requiring checks to pass.
-- [x] **Move BasePytorchModel to its own file.** `base.py` imports torch and lightning unconditionally, so even sklearn-only usage pays for the full PyTorch import chain. Splitting BasePytorchModel out would fix this.
-- [x] **Document the `__init_subclass__` param capture for onboarding.** The auto-capture of `_model_params` is non-obvious to newcomers. Add an explanation to the contributing guide or model-authoring docs.
-- [x] **Add central seed management for reproducibility.** `seed_everything()` utility seeds Python, NumPy, and PyTorch. Configs have a top-level `"seed"` key; scripts seed early and pass to `model.train(seed=...)`.
-- [x] **HuggingFace-style model loading.** `ModelClass.load(path)` classmethod reads `config.json`, instantiates the model, loads weights, and returns the instance — no need for the caller to know the architecture params upfront.
-- [x] **Mid-training checkpointing.** `train(save_model="best"|"final", model_path=...)` saves on best val loss or at end of training. Works with both local and S3 paths (S3: checkpoints locally, uploads once after training).
-- [ ] **Consider decorator-based model registration.** Currently adding a model requires editing two files (model file + registry.py), which causes merge conflicts when multiple people add models simultaneously.
-- [x] **Add API serving.** FastAPI server for model inference. Load a saved model from config, expose `/health`, `/info`, and `/predict` endpoints, containerized for deployment.
-- [ ] **Support regression tasks in Dataset.** `y` is always cast to `long()` and `LabelEncoder` is built in, so the data layer is classification-only. Regression would need a new dataset class or modifications.

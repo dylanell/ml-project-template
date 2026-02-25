@@ -4,20 +4,22 @@ from __future__ import annotations
 
 from typing import Union, Any, Optional, List, Literal
 
+import os
+import numpy as np
 import torch
 import torch.nn as nn
 from tqdm import tqdm
-
+import lightning as L
 from lightning.fabric.accelerators import Accelerator
 from lightning.fabric.loggers import Logger
 from lightning.fabric.strategies import Strategy
 
 from ml_project_template.data import TabularDataset
-from ml_project_template.models.pytorch_base import BasePytorchModel
+from ml_project_template.models.base import BaseModel
 from ml_project_template.modules.fully_connected import FullyConnected
 
 
-class MLPClassifier(BasePytorchModel):
+class MLPClassifier(BaseModel):
     """Simple 2-layer MLP classifier."""
 
     def __init__(
@@ -35,7 +37,10 @@ class MLPClassifier(BasePytorchModel):
         callbacks: Optional[Union[list[Any], Any]] = None,
         loggers: Optional[Union[Logger, list[Logger]]] = None
     ):
-        super().__init__(
+        super().__init__()
+
+        # Initialize fabric
+        self.fabric = L.Fabric(
             accelerator=accelerator,
             strategy=strategy,
             devices=devices,
@@ -144,6 +149,21 @@ class MLPClassifier(BasePytorchModel):
         self.log_param("max_epochs", max_epochs)
         self.log_param("val_frequency", val_frequency)
         self.log_param("patience", patience)
-        self.log_param("save_model", save_model)
-        self.log_param("model_path", model_path)
 
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """Run inference. Returns raw model output as numpy array."""
+        self.model.eval()
+        X_tensor = torch.from_numpy(X).float().to(self.fabric.device)
+        with torch.no_grad():
+            output = self.model(X_tensor)
+        return output.cpu().numpy()
+
+    def _save_weights(self, dir_path: str) -> None:
+        """Save model state dict to directory."""
+        self.fabric.save(os.path.join(dir_path, "model.pt"), {"model": self.model})
+
+    def _load_weights(self, dir_path: str) -> None:
+        """Load model state dict from directory."""
+        state = {"model": self.model}
+        self.fabric.load(os.path.join(dir_path, "model.pt"), state)
+        
