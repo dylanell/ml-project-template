@@ -30,7 +30,7 @@ def main():
     with open(args.config) as f:
         config = json.load(f)
 
-    print(f"[serve] Running with config:")
+    print("[serve] Running with config:")
     print(json.dumps(config, indent=2))
 
     for key in ("data", "model", "training"):

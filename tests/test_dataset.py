@@ -7,12 +7,8 @@ Tests cover dataset operations that don't require external services:
   set (regression test for get_storage_options bug).
 """
 
-import os
-import tempfile
 
-import numpy as np
 import pandas as pd
-import pytest
 import torch
 from torch.utils.data import DataLoader
 

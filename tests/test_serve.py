@@ -11,7 +11,6 @@ Helpers:
 
 import tempfile
 
-import numpy as np
 from fastapi.testclient import TestClient
 
 from ml_project_template.models.mlp_classifier import MLPClassifier
