@@ -31,7 +31,13 @@ def _make_config(model_name, model_params, model_path):
 def _train_and_save_mlp(iris_tiny, tmp_dir):
     """Train a small MLP, save to tmp_dir, return a config pointing to it."""
     model = MLPClassifier(layer_dims=[4, 8, 3])
-    model.train(train_data=iris_tiny, tracking=False, max_epochs=5)
+    model.train(
+        train_data=iris_tiny,
+        val_data=iris_tiny,
+        tracking=False,
+        max_epochs=5,
+        model_path=f"{tmp_dir}/run",
+    )
     model.save(f"{tmp_dir}/model")
     return _make_config("mlp_classifier", {"layer_dims": [4, 8, 3]}, f"{tmp_dir}/model")
 
@@ -39,7 +45,12 @@ def _train_and_save_mlp(iris_tiny, tmp_dir):
 def _train_and_save_gb(iris_tiny, tmp_dir):
     """Train a small GB classifier, save to tmp_dir, return a config pointing to it."""
     model = GBClassifier(n_estimators=10, max_depth=2)
-    model.train(train_data=iris_tiny, tracking=False)
+    model.train(
+        train_data=iris_tiny,
+        val_data=iris_tiny,
+        tracking=False,
+        model_path=f"{tmp_dir}/run",
+    )
     model.save(f"{tmp_dir}/model")
     return _make_config("gb_classifier", {"n_estimators": 10, "max_depth": 2}, f"{tmp_dir}/model")
 

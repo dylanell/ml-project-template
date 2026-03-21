@@ -31,18 +31,21 @@ class TestSeedEverything:
     def test_mlp_training_determinism(self, iris_tiny):
         """Two MLP training runs with the same seed produce identical predictions.
 
-        Seeds before model construction (matching the real script flow:
-        seed_everything → create model → model.train(seed=...)).
+        Seeds immediately before model construction (matching the real script flow:
+        seed_everything → create model → model.train()).
         """
         def train_and_predict(seed):
+            import tempfile
             seed_everything(seed)
             model = MLPClassifier(layer_dims=[4, 8, 3])
-            model.train(
-                train_data=iris_tiny,
-                tracking=False,
-                seed=seed,
-                max_epochs=5,
-            )
+            with tempfile.TemporaryDirectory() as tmp:
+                model.train(
+                    train_data=iris_tiny,
+                    val_data=iris_tiny,
+                    tracking=False,
+                    max_epochs=5,
+                    model_path=f"{tmp}/run",
+                )
             return model.predict(iris_tiny.X)
 
         preds1 = train_and_predict(99)

@@ -7,9 +7,8 @@ import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel as PydanticBaseModel
 
-from ml_project_template.data import TabularDataset
-from ml_project_template.models import ModelRegistry
-from ml_project_template.utils import get_storage_options
+from ..data import TabularDataset
+from ..models import ModelRegistry
 
 
 class PredictRequest(PydanticBaseModel):
@@ -31,11 +30,7 @@ def create_app(config: dict, feature_names: list[str] | None = None, class_names
     # Load dataset metadata if not provided
     if feature_names is None or class_names is None:
         data_cfg = config["data"]
-        dataset = TabularDataset.from_csv(
-            data_cfg["path"],
-            target_column=data_cfg["target_column"],
-            storage_options=get_storage_options(data_cfg["path"]),
-        )
+        dataset = TabularDataset(csv_path=data_cfg["path"], target_col=data_cfg["target_column"])
         feature_names = feature_names or dataset.feature_names
         class_names = class_names or dataset.class_names
 
