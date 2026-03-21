@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import os
 
-from ml_project_template.models.base import BaseModel
-from ml_project_template.models.gb_classifier import GBClassifier
-from ml_project_template.models.mlp_classifier import MLPClassifier
+from .base import BaseModel
+from .gb_classifier import GBClassifier
+from .mlp_classifier import MLPClassifier
 
 
 class ModelRegistry:
@@ -31,20 +31,22 @@ class ModelRegistry:
         return cls._models[name]
 
     @classmethod
-    def get_name(cls, model_class: type[BaseModel]) -> str:
-        """Reverse lookup: Get name by model class."""
-        for name, klass in cls._models.items():
-            if klass is model_class:
-                return name
-        raise ValueError(f"Model class {model_class} is not registered.")
+    def load(cls, path: str, device=None) -> BaseModel:
+        """Load a model from a directory containing config.json and weights.
 
-    @classmethod
-    def load(cls, path: str) -> BaseModel:
-        """Load a model from a directory containing config.json and weights."""
+        Args:
+            path: Directory containing config.json and weights.
+            device: Optional device to move the model to after loading
+                    (e.g. "cuda", "mps", torch.device("cuda:0")).
+                    No-op for non-PyTorch models.
+        """
         with open(os.path.join(path, "config.json")) as f:
             config = json.load(f)
         model_class = cls.get(config["model_name"])
-        return model_class.load(path)
+        model = model_class.load(path)
+        if device is not None:
+            model.to(device)
+        return model
 
     @classmethod
     def register(cls, name: str, model_class: type[BaseModel]) -> None:

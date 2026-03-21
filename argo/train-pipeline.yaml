@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
-  generateName: train-classifier-pipeline-
+  generateName: train-pipeline-
 spec:
   entrypoint: pipeline
   arguments:

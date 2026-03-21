@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import os
-from typing import Optional
 import joblib
 import numpy as np
 from sklearn.ensemble import GradientBoostingClassifier as _GradientBoostingClassifier
 
-from ml_project_template.data import TabularDataset
-from ml_project_template.models.base import BaseModel
+from ..data import TabularDataset
+from .base import BaseModel
 
 
 class GBClassifier(BaseModel):
     """Scikit-learn Gradient Boosting classifier wrapper."""
+
+    name = "gb_classifier"
 
     def __init__(self, **kwargs):
         self.model = _GradientBoostingClassifier(**kwargs)
@@ -21,10 +22,15 @@ class GBClassifier(BaseModel):
     def _fit(
         self,
         train_data: TabularDataset,
-        val_data: Optional[TabularDataset] = None,
-        **kwargs
+        val_data: TabularDataset,
+        **kwargs,
     ) -> None:
         self.model.fit(train_data.X, train_data.y)
+
+        # Final validation metrics
+        metrics = self.evaluate(val_data)
+        for k, v in metrics.items():
+            self.log_metric(f"val_{k}", v)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         return self.model.predict(X)

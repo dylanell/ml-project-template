@@ -42,7 +42,6 @@ Configure VSCode notebooks (add to .vscode/settings.json)
 ```
 src/ml_project_template/
 ├── data/                          # Dataset abstractions
-│   ├── base.py                    # BaseDataset ABC
 │   └── tabular.py                 # TabularDataset for numerical data
 ├── models/                        # Model implementations
 │   ├── base.py                    # BaseModel ABC (MLflow, save/load)
@@ -73,10 +72,9 @@ tests/                             # Test suite (no external services needed)
 ### Data Loading
 ```python
 from ml_project_template.data import TabularDataset
-from ml_project_template.utils import get_storage_options
 
-dataset = TabularDataset.from_csv("s3://data/iris/iris.csv", target_column="species", storage_options=get_storage_options("s3://data/iris/iris.csv"))
-train_data, test_data = dataset.split(test_size=0.2, random_state=42)
+train_data = TabularDataset(csv_path=".data/iris/processed/train.csv", target_col="species")
+val_data = TabularDataset(csv_path=".data/iris/processed/valid.csv", target_col="species")
 ```
 
 ### Model Registry
@@ -101,7 +99,6 @@ model.train(
     val_data=val_data,
     model_path=".models/my_model",  # local or s3:// path
     run_name="run-1",               # optional
-    save_model="best",              # optional: "best" or "final" (works with S3 paths too)
     # Model-specific training kwargs (e.g. for MLP):
     lr=1e-3,
     weight_decay=1e-4,
@@ -126,7 +123,7 @@ Set a top-level `"seed"` key in your config JSON to seed all random number gener
 }
 ```
 
-Scripts call `seed_everything(seed)` before data loading, and pass `seed=seed` to `model.train()` which re-seeds before training. The seed is logged to MLflow automatically.
+Scripts call `seed_everything(seed)` immediately before model construction so that weight initialisation is reproducible regardless of any RNG state changes during data loading.
 
 ```python
 from ml_project_template.utils import seed_everything
@@ -189,8 +186,10 @@ See the implementation in `src/ml_project_template/models/base.py` lines 35–74
 **Example — what happens when `MLPClassifier(layer_dims=[4, 8, 3])` is created:**
 
 1. `MLPClassifier.__init__` runs and completes
-2. The wrapper captures all arguments — `layer_dims=[4, 8, 3]`, `hidden_activation="ReLU"`, `output_activation="Identity"`, `use_bias=True`, `norm=None`, plus all Fabric defaults (`accelerator="auto"`, etc.) — into `self._model_params`
+2. The wrapper captures all arguments — `layer_dims=[4, 8, 3]`, `hidden_activation="ReLU"`, `output_activation="Identity"`, `use_bias=True`, `norm=None` — into `self._model_params`
 3. `model.get_params()` returns the full dict
+
+
 
 **When to override `get_params()`:**
 
@@ -236,7 +235,7 @@ docker run --env-file .env \
   -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
   -e MLFLOW_S3_ENDPOINT_URL=http://host.docker.internal:7000 \
   -v $(pwd)/configs:/app/configs \
-  preprocess-job --config configs/iris_mlp_classifier.json
+  preprocess-job --config configs/remote/iris_mlp_classifier.json
 
 # Run training (reads data via S3, saves model to S3, logs to MLflow)
 docker run --env-file .env \
@@ -244,7 +243,7 @@ docker run --env-file .env \
   -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
   -e MLFLOW_S3_ENDPOINT_URL=http://host.docker.internal:7000 \
   -v $(pwd)/configs:/app/configs \
-  train-job --config configs/iris_mlp_classifier.json
+  train-job --config configs/remote/iris_mlp_classifier.json
 ```
 
 > `--env-file .env` loads S3 and MLflow credentials. The `-e` flags override the endpoint URLs to use `host.docker.internal`, which resolves to the host machine from inside Docker containers (Mac/Windows). On Linux, add `--add-host=host.docker.internal:host-gateway` to the `docker run` command.
@@ -255,7 +254,7 @@ Serve a trained model via FastAPI. The server reads the same JSON config used fo
 
 ```bash
 # Local (requires a trained model saved to the configured model_path)
-uv run python scripts/serve.py --config configs/iris_mlp_classifier.json
+uv run python scripts/serve.py --config configs/remote/iris_mlp_classifier.json
 
 # Docker
 docker build -t serve-job -f docker/serve/Dockerfile .
@@ -264,7 +263,7 @@ docker run --env-file .env \
   -e S3_ENDPOINT_URL=http://host.docker.internal:7000 \
   -p 8000:8000 \
   -v $(pwd)/configs:/app/configs \
-  serve-job --config configs/iris_mlp_classifier.json
+  serve-job --config configs/remote/iris_mlp_classifier.json
 ```
 
 Test the endpoints:
@@ -292,13 +291,13 @@ kubectl apply -n argo --server-side -f https://github.com/argoproj/argo-workflow
 source .env && kubectl create secret generic s3-credentials --namespace argo \
   --from-literal=AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
   --from-literal=AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-kubectl create configmap training-configs --namespace argo --from-file=configs/
+kubectl create configmap training-configs --namespace argo --from-file=configs/remote/
 
 # Submit a pipeline (uses MLP config by default)
-argo submit -n argo argo/train-classifier-pipeline.yaml --watch
+argo submit -n argo argo/train-pipeline.yaml --watch
 
 # Or specify a different config
-argo submit -n argo argo/train-classifier-pipeline.yaml -p config=configs/iris_gb_classifier.json --watch
+argo submit -n argo argo/train-pipeline.yaml -p config=configs/remote/iris_gb_classifier.json --watch
 
 # Argo UI (optional)
 kubectl port-forward -n argo svc/argo-server 2746:2746
@@ -308,7 +307,7 @@ kubectl port-forward -n argo svc/argo-server 2746:2746
 To update configs after changing them locally:
 
 ```bash
-kubectl create configmap training-configs --namespace argo --from-file=configs/ --dry-run=client -o yaml | kubectl apply -f -
+kubectl create configmap training-configs --namespace argo --from-file=configs/remote/ --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 ## Testing

@@ -1,13 +1,13 @@
 {
     "seed": 42,
     "data": {
-        "path": ".data/iris/iris.csv",
+        "path": "s3://data/iris/raw/iris.csv",
         "target_column": "species",
-        "test_size": 0.2
+        "valid_size": 0.2
     },
     "preprocessing": {
         "scaling": "min-max",
-        "output_path": ".data/iris/iris_processed.csv"
+        "output_dir": "s3://data/iris/processed"
     },
     "model": {
         "name": "gb_classifier",
@@ -19,7 +19,7 @@
     "training": {
         "experiment_name": "iris-gb-classifier",
         "run_name": null,
-        "model_path": ".models/iris_gb_classifier",
-        "tracking": false
+        "model_path": "s3://models/iris_gb_classifier",
+        "tracking": true
     }
 }
