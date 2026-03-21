@@ -186,7 +186,7 @@ See the implementation in `src/ml_project_template/models/base.py` lines 35–74
 **Example — what happens when `MLPClassifier(layer_dims=[4, 8, 3])` is created:**
 
 1. `MLPClassifier.__init__` runs and completes
-2. The wrapper captures all arguments — `layer_dims=[4, 8, 3]`, `hidden_activation="ReLU"`, `output_activation="Identity"`, `use_bias=True`, `norm=None`, plus all Fabric defaults (`accelerator="auto"`, etc.) — into `self._model_params`
+2. The wrapper captures all arguments — `layer_dims=[4, 8, 3]`, `hidden_activation="ReLU"`, `output_activation="Identity"`, `use_bias=True`, `norm=None` — into `self._model_params`
 3. `model.get_params()` returns the full dict
 
 
@@ -294,10 +294,10 @@ source .env && kubectl create secret generic s3-credentials --namespace argo \
 kubectl create configmap training-configs --namespace argo --from-file=configs/remote/
 
 # Submit a pipeline (uses MLP config by default)
-argo submit -n argo argo/train-classifier-pipeline.yaml --watch
+argo submit -n argo argo/train-pipeline.yaml --watch
 
 # Or specify a different config
-argo submit -n argo argo/train-classifier-pipeline.yaml -p config=configs/remote/iris_gb_classifier.json --watch
+argo submit -n argo argo/train-pipeline.yaml -p config=configs/remote/iris_gb_classifier.json --watch
 
 # Argo UI (optional)
 kubectl port-forward -n argo svc/argo-server 2746:2746

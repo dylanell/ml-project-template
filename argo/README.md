@@ -8,10 +8,10 @@ Run the full pipeline (preprocess → train) as an Argo Workflow DAG on a local 
 2. **Local services running**: `docker compose up -d` (MinIO + MLflow)
 3. **Images built locally**:
    ```bash
-   docker build -t preprocessing-job -f docker/preprocess-iris-dataset/Dockerfile .
-   docker build -t training-job -f docker/train-iris-classifier/Dockerfile .
+   docker build -t preprocess-job -f docker/preprocess/Dockerfile .
+   docker build -t train-job -f docker/train/Dockerfile .
    ```
-4. **Data onboarded to S3**: `uv run python scripts/onboard_iris_dataset.py --dest s3://data/iris/`
+4. **Data onboarded to S3**: `uv run python scripts/onboard.py --dest s3://data/iris/`
 5. **Argo CLI installed**: `brew install argo`
 
 ## First-Time Setup
@@ -27,13 +27,13 @@ kubectl apply -n argo --server-side -f https://github.com/argoproj/argo-workflow
 source .env && kubectl create secret generic s3-credentials --namespace argo \
   --from-literal=AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
   --from-literal=AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-kubectl create configmap training-configs --namespace argo --from-file=configs/
+kubectl create configmap training-configs --namespace argo --from-file=configs/remote/
 ```
 
 To update configs after changing them locally:
 
 ```bash
-kubectl create configmap training-configs --namespace argo --from-file=configs/ --dry-run=client -o yaml | kubectl apply -f -
+kubectl create configmap training-configs --namespace argo --from-file=configs/remote/ --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 ## Usage
@@ -42,10 +42,10 @@ kubectl create configmap training-configs --namespace argo --from-file=configs/ 
 
 ```bash
 # Uses MLP config by default
-argo submit -n argo argo/iris-classifier-pipeline.yaml --watch
+argo submit -n argo argo/train-pipeline.yaml --watch
 
 # Or specify a different config via -p
-argo submit -n argo argo/iris-classifier-pipeline.yaml -p config=configs/iris_gb_classifier.json --watch
+argo submit -n argo argo/train-pipeline.yaml -p config=configs/remote/iris_gb_classifier.json --watch
 ```
 
 ### Argo UI (Optional)
